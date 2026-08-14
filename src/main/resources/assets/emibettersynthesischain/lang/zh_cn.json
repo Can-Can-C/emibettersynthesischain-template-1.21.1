@@ -1,0 +1,31 @@
+{
+  "key.emibettersynthesischain.auto_craft": "自动合成",
+  "category.emibettersynthesischain": "EMI Better Synthesis Chain",
+
+  "emibettersynthesischain.configuration.title": "EMI Better Synthesis Chain 配置",
+  "emibettersynthesischain.configuration.section.emibettersynthesischain.common.toml": "EMI Better Synthesis Chain 配置",
+  "emibettersynthesischain.configuration.section.emibettersynthesischain.common.toml.title": "EMI Better Synthesis Chain 配置",
+  "emibettersynthesischain.configuration.treeSidebarWidth": "侧边栏宽度",
+  "emibettersynthesischain.configuration.treeRowSpacing": "合成树行高",
+  "emibettersynthesischain.configuration.treeItemGap": "物品间距",
+  "emibettersynthesischain.configuration.treeTreeGap": "树间距",
+  "emibettersynthesischain.configuration.treeByproductGap": "副产物间距",
+  "emibettersynthesischain.configuration.treeRedMarking": "材料不足标红",
+  "emibettersynthesischain.configuration.autoCraftShowTicks": "每步显示时长(tick)",
+  "emibettersynthesischain.configuration.autoCraftGapTicks": "步间间隔(tick)",
+  "emibettersynthesischain.configuration.autoCraftFailureMessages": "失败提示",
+
+  "ebs.config.title": "EMI Better Synthesis Chain",
+  "ebs.config.tree": "合成树",
+  "ebs.config.tree.sidebarWidth": "侧边栏宽度",
+  "ebs.config.tree.rowSpacing": "行高",
+  "ebs.config.tree.itemGap": "物品间距",
+  "ebs.config.tree.treeGap": "树间距",
+  "ebs.config.tree.byproductGap": "副产物间距",
+  "ebs.config.tree.redMarking": "材料不足标红",
+  "ebs.config.autoCraft": "自动合成",
+  "ebs.config.autoCraft.showTicks": "每步显示时长(tick)",
+  "ebs.config.autoCraft.gapTicks": "步间间隔(tick)",
+  "ebs.config.autoCraft.failureMessages": "失败提示",
+  "ebs.config.reset": "重置本 Mod 全部设置"
+}

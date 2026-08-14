@@ -1,0 +1,31 @@
+{
+  "key.emibettersynthesischain.auto_craft": "Auto Craft",
+  "category.emibettersynthesischain": "EMI Better Synthesis Chain",
+
+  "emibettersynthesischain.configuration.title": "EMI Better Synthesis Chain Configs",
+  "emibettersynthesischain.configuration.section.emibettersynthesischain.common.toml": "EMI Better Synthesis Chain Configs",
+  "emibettersynthesischain.configuration.section.emibettersynthesischain.common.toml.title": "EMI Better Synthesis Chain Configs",
+  "emibettersynthesischain.configuration.treeSidebarWidth": "Sidebar Width",
+  "emibettersynthesischain.configuration.treeRowSpacing": "Tree Row Spacing",
+  "emibettersynthesischain.configuration.treeItemGap": "Item Gap",
+  "emibettersynthesischain.configuration.treeTreeGap": "Tree Gap",
+  "emibettersynthesischain.configuration.treeByproductGap": "Byproduct Gap",
+  "emibettersynthesischain.configuration.treeRedMarking": "Red-mark Insufficient Materials",
+  "emibettersynthesischain.configuration.autoCraftShowTicks": "Step Show Duration (ticks)",
+  "emibettersynthesischain.configuration.autoCraftGapTicks": "Step Gap (ticks)",
+  "emibettersynthesischain.configuration.autoCraftFailureMessages": "Failure Messages",
+
+  "ebs.config.title": "EMI Better Synthesis Chain",
+  "ebs.config.tree": "Crafting Tree",
+  "ebs.config.tree.sidebarWidth": "Sidebar Width",
+  "ebs.config.tree.rowSpacing": "Row Spacing",
+  "ebs.config.tree.itemGap": "Item Gap",
+  "ebs.config.tree.treeGap": "Tree Gap",
+  "ebs.config.tree.byproductGap": "Byproduct Gap",
+  "ebs.config.tree.redMarking": "Red-mark Insufficient Materials",
+  "ebs.config.autoCraft": "Auto Craft",
+  "ebs.config.autoCraft.showTicks": "Step Show Duration (ticks)",
+  "ebs.config.autoCraft.gapTicks": "Step Gap (ticks)",
+  "ebs.config.autoCraft.failureMessages": "Failure Messages",
+  "ebs.config.reset": "Reset All Mod Settings"
+}
