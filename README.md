@@ -61,4 +61,4 @@ NeoForge 1.21.1 / EMI 1.1.24 的 **EMI 附属 mod**：重写 EMI 的配方树（
 
 ## License
 
-[MIT](LICENSE)（Copyright (c) 2026 cancan）。EMI 为 MIT 许可（本地 jar 见 `libs/`，随仓库分发以便直接构建）。
+[MIT](LICENSE)（Copyright (c) 2026 Can-Can-C）。EMI 为 MIT 许可（本地 jar 见 `libs/`，随仓库分发以便直接构建）。
