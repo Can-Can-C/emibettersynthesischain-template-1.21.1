@@ -19,6 +19,9 @@ public class Config {
     private static final int DEF_AUTO_CRAFT_SHOW_TICKS = 6;
     private static final int DEF_AUTO_CRAFT_GAP_TICKS = 2;
     private static final boolean DEF_AUTO_CRAFT_FAILURE_MESSAGES = true;
+    private static final String DEF_TREE_GOAL_SIDE = "right";
+    private static final boolean DEF_TREE_BACKGROUND_TRANSPARENT = true;
+    private static final double DEF_TREE_NUMBER_SCALE = 0.5;
 
     /** 树模式下左侧栏的物品列数（宽度 = 列数×9px + 内边距，越大面板越宽）。 */
     public static final ModConfigSpec.IntValue TREE_SIDEBAR_WIDTH = BUILDER
@@ -52,6 +55,25 @@ public class Config {
             .comment("Red-mark insufficient-material nodes while hovering the tree.")
             .define("treeRedMarking", DEF_TREE_RED_MARKING);
 
+    /** 合成树最终产物列在左还是右（"left"/"right"），默认右。 */
+    public static final ModConfigSpec.ConfigValue<String> TREE_GOAL_SIDE = BUILDER
+            .comment("Which side the final product column sits on in the synthesis tree.",
+                    "Use \"left\" or \"right\". Default is right.")
+            .define("treeGoalSide", DEF_TREE_GOAL_SIDE,
+                    (Object v) -> "left".equals(v) || "right".equals(v));
+
+    /** 合成树背景是否透明（默认透明；关闭恢复深色背景）。 */
+    public static final ModConfigSpec.BooleanValue TREE_BACKGROUND_TRANSPARENT = BUILDER
+            .comment("Make the synthesis tree background transparent (like the favorites sidebar),",
+                    "or draw the old dark background. Default is transparent.")
+            .define("treeBackgroundTransparent", DEF_TREE_BACKGROUND_TRANSPARENT);
+
+    /** 合成树图标上数字（数量/拥有量/流体用量）的缩放倍数。 */
+    public static final ModConfigSpec.DoubleValue TREE_NUMBER_SCALE = BUILDER
+            .comment("Scale of the small number text drawn on tree item icons (count / owned / fluid amount).",
+                    "0.5 = half size, 1.0 = full size.")
+            .defineInRange("treeNumberScale", DEF_TREE_NUMBER_SCALE, 0.25, 1.0);
+
     /** 可见合成链每步材料进格后的显示时长（tick）。 */
     public static final ModConfigSpec.IntValue AUTO_CRAFT_SHOW_TICKS = BUILDER
             .comment("Ticks each crafting step stays visible in the grid (show duration).")
@@ -82,6 +104,9 @@ public class Config {
         TREE_TREE_GAP.set(DEF_TREE_TREE_GAP);
         TREE_BYPRODUCT_GAP.set(DEF_TREE_BYPRODUCT_GAP);
         TREE_RED_MARKING.set(DEF_TREE_RED_MARKING);
+        TREE_GOAL_SIDE.set(DEF_TREE_GOAL_SIDE);
+        TREE_BACKGROUND_TRANSPARENT.set(DEF_TREE_BACKGROUND_TRANSPARENT);
+        TREE_NUMBER_SCALE.set(DEF_TREE_NUMBER_SCALE);
         AUTO_CRAFT_SHOW_TICKS.set(DEF_AUTO_CRAFT_SHOW_TICKS);
         AUTO_CRAFT_GAP_TICKS.set(DEF_AUTO_CRAFT_GAP_TICKS);
         AUTO_CRAFT_FAILURE_MESSAGES.set(DEF_AUTO_CRAFT_FAILURE_MESSAGES);

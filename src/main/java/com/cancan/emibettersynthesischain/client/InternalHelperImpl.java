@@ -4,14 +4,17 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import com.cancan.emibettersynthesischain.Config;
 import com.cancan.emibettersynthesischain.EMIBettersynthesischain;
 
 import dev.emi.emi.api.EmiApi;
+import dev.emi.emi.api.recipe.EmiPlayerInventory;
 import dev.emi.emi.api.recipe.EmiRecipe;
 import dev.emi.emi.api.recipe.EmiRecipeManager;
 import dev.emi.emi.api.stack.EmiIngredient;
@@ -49,6 +52,10 @@ public class InternalHelperImpl implements IEmiInternal {
     private int lastBoMHash = Integer.MIN_VALUE;
     private int lastInvHash = Integer.MIN_VALUE;
     private int boMCheckCounter = 0;
+    /** 树重建时构建一次的库存快照：hasEnough/canObtain 全部复用，避免每次计数重建快照（性能热点）。 */
+    private EmiPlayerInventory invSnapshot;
+    /** 产出配方候选缓存：EMI 配方集合会话内静态，按材料键缓存（canObtain 递归热点）。 */
+    private final Map<String, List<ProducerEntry>> producerCache = new HashMap<>();
 
     private InternalHelperImpl() {
     }
@@ -158,6 +165,9 @@ public class InternalHelperImpl implements IEmiInternal {
         maybeRefreshOnBoMChange();
         maybeRefreshOnInventoryChange();
         if (treeCache == null || TreeManager.INSTANCE.isDirty()) {
+            // 树重建时刷新一次库存快照：hasEnough/canObtain 全部用同一快照，
+            // 避免每个节点每次计数都重建 EmiPlayerInventory（合成量大时是主要卡顿源）。
+            invSnapshot = CraftInventory.currentScreenInventory();
             List<TreeData> trees = new ArrayList<>();
             for (int i = 0; i < TreeManager.INSTANCE.size(); i++) {
                 ItemStack item = TreeManager.INSTANCE.getItem(i);
@@ -198,8 +208,11 @@ public class InternalHelperImpl implements IEmiInternal {
             }
             int hash = 0;
             for (ItemStack s : player.getInventory().items) {
-                hash = hash * 31 + s.getItem().hashCode();
-                hash = hash * 31 + s.getCount();
+                if (!s.isEmpty()) {
+                    // 组件感知：用 hashItemAndComponents（含 NBT），区分同 item 不同组件（药水/时长/附魔）
+                    hash = hash * 31 + ItemStack.hashItemAndComponents(s);
+                    hash = hash * 31 + s.getCount();
+                }
             }
             // 3×3 标红依赖"是否打开工作台界面"，菜单切换也触发刷新
             hash = hash * 31 + (player.containerMenu == null ? 0
@@ -249,8 +262,13 @@ public class InternalHelperImpl implements IEmiInternal {
             }
             long deltaBatch = newBatch - agg.batch;
             agg.batch = newBatch;
+            // EMI 式防环：禁止子材料用"到达本材料的路径上"已用过的配方
+            Set<EmiRecipe> forbidden = new HashSet<>(agg.path);
+            if (agg.recipe != null) {
+                forbidden.add(agg.recipe);
+            }
             for (EmiIngredient input : agg.recipe.getInputs()) {
-                addNeed(aggs, queue, input, input.getAmount() * deltaBatch, agg.depth + 1);
+                addNeed(aggs, queue, input, input.getAmount() * deltaBatch, agg.depth + 1, forbidden);
             }
         }
 
@@ -321,12 +339,13 @@ public class InternalHelperImpl implements IEmiInternal {
         }
 
         // 封装为 TreeItem（标红：能否获得该节点——自身够或可由工作台链式合成，含标签成员/3×3 需工作台）
-        TreeData.TreeItem goalItem = new TreeData.TreeItem(goalDisp, canObtain(goalDisp, goalOutput, goalAgg.recipe, 0),
-                resolvedToFor(goalAgg));
+        TreeData.TreeItem goalItem = new TreeData.TreeItem(goalDisp,
+                canObtain(goalDisp, goalOutput, goalAgg.recipe, 0, new HashSet<>()), resolvedToFor(goalAgg));
         List<TreeData.TreeItem> directItems = new ArrayList<>();
         for (EmiIngredient input : directInputs) {
             Agg agg = aggs.get(key(input));
-            directItems.add(new TreeData.TreeItem(input, canObtain(input, input.getAmount(), agg == null ? null : agg.recipe, 0),
+            directItems.add(new TreeData.TreeItem(input,
+                    canObtain(input, input.getAmount(), agg == null ? null : agg.recipe, 0, new HashSet<>()),
                     resolvedToFor(agg)));
         }
         List<List<TreeData.TreeItem>> rowItems = new ArrayList<>();
@@ -334,29 +353,55 @@ public class InternalHelperImpl implements IEmiInternal {
             List<TreeData.TreeItem> items = new ArrayList<>();
             for (EmiIngredient ing : row) {
                 Agg agg = aggs.get(key(ing));
-                items.add(new TreeData.TreeItem(ing, canObtain(ing, ing.getAmount(), agg == null ? null : agg.recipe, 0),
+                items.add(new TreeData.TreeItem(ing,
+                        canObtain(ing, ing.getAmount(), agg == null ? null : agg.recipe, 0, new HashSet<>()),
                         resolvedToFor(agg)));
             }
             rowItems.add(items);
         }
 
-        return new TreeData(goalItem, directItems, rowItems, byproducts);
+        // Q3: 顶部"底层总材料"行 = 当前所有叶节点（recipe==null，即递归到底/库存已足不再展开）所需量汇总。
+        // 目标本身不算；same 材料若出现多次会用 need 聚合成单条。
+        List<TreeData.TreeItem> leafTotal = new ArrayList<>();
+        for (Map.Entry<String, Agg> e : aggs.entrySet()) {
+            Agg agg = e.getValue();
+            if (agg == goalAgg || agg.recipe != null || agg.need <= 0) {
+                continue; // 跳过目标与中间产物（非叶）
+            }
+            leafTotal.add(new TreeData.TreeItem(agg.content.copy().setAmount(Math.max(1, agg.need)),
+                    true, // 叶节点 = 库存已足可提供
+                    resolvedToFor(agg)));
+        }
+        // 保持视觉稳定：已解析标签在前，再按内容键排序（避免 HashMap 乱序）
+        leafTotal.sort((a, b) -> {
+            int rv = Boolean.compare(b.hasResolved(), a.hasResolved());
+            if (rv != 0) {
+                return rv;
+            }
+            return key(a.content()).compareTo(key(b.content()));
+        });
+
+        return new TreeData(goalItem, leafTotal, directItems, rowItems, byproducts);
     }
 
-    /** 玩家背包中该材料数量是否达到所需量（材料节点标红依据）。标签取首个成员计数。 */
+    /** 当前屏幕库存中该材料数量是否达到所需量（材料节点标红依据；跟随当前界面，如 AE2 终端=网络+背包）。 */
     private boolean hasEnough(EmiIngredient content, long amount) {
         try {
-            Player player = Minecraft.getInstance().player;
-            if (player == null || amount <= 0) {
+            if (amount <= 0) {
                 return true;
             }
             ItemStack item = firstStack(content);
             if (item.isEmpty()) {
                 return true; // 流体/不可作为物品计数
             }
-            return player.getInventory().countItem(item.getItem()) >= amount;
+            if (invSnapshot != null) {
+                // 树构建期间：复用本次重建的统一快照（避免每个节点每次重建）
+                return CraftInventory.count(invSnapshot, content) >= amount;
+            }
+            return CraftInventory.hasEnough(content, amount);
         } catch (Exception e) {
-            return true;
+            // 无法确认足够时按"不足"处理（标红保守），不再掩盖错误静默放行
+            return false;
         }
     }
 
@@ -380,35 +425,38 @@ public class InternalHelperImpl implements IEmiInternal {
 
     /**
      * 玩家当前能否**获得**该材料（链条可达，客户端干跑）：自身数量足够 → true；否则**任一**产出它的
-     * **工作台配方**（首选 BoM 默认，跳过分解类，含标签成员；中间 3×3 需附近工作台）的子材料链式可得
-     * → true。**非工作台步骤不可合成**。与服务端一致。
+     * **工作台配方**（首选 BoM 默认，含标签成员；中间 3×3 需打开工作台界面）的子材料链式可得 → true。
+     * **EMI 祖先配方栈防环**：递归路径上配方重复即剪枝。**非工作台步骤不可合成**。
      */
-    private boolean canObtain(EmiIngredient content, long amount, EmiRecipe preferred, int depth) {
+    private boolean canObtain(EmiIngredient content, long amount, EmiRecipe preferred, int depth,
+            Set<EmiRecipe> ancestors) {
         if (depth > 6) {
             return false;
         }
         if (hasEnough(content, amount)) {
             return true; // 自身数量足够
         }
-        for (EmiRecipe producer : workbenchProducers(content, preferred)) {
-            if (!is2x2Recipe(producer) && !hasCraftingMenuOpen()) {
+        for (ProducerEntry producer : producersOf(content, preferred)) {
+            EmiRecipe r = producer.recipe();
+            if (ancestors.contains(r)) {
+                continue; // 祖先栈上已有该配方 → 环，剪枝
+            }
+            if (!producer.is2x2() && !hasCraftingMenuOpen()) {
                 continue; // 中间 3×3 需打开工作台界面
             }
-            long perBatch = outputAmount(producer, content);
-            if (perBatch <= 0) {
-                continue;
-            }
-            long batches = ceilDiv(amount, perBatch);
+            long batches = ceilDiv(amount, producer.perBatch());
+            ancestors.add(r);
             boolean ok = true;
-            for (EmiIngredient input : producer.getInputs()) {
+            for (EmiIngredient input : r.getInputs()) {
                 if (input.isEmpty()) {
                     continue;
                 }
-                if (!canObtain(input, input.getAmount() * batches, null, depth + 1)) {
+                if (!canObtain(input, input.getAmount() * batches, null, depth + 1, ancestors)) {
                     ok = false;
                     break;
                 }
             }
+            ancestors.remove(r);
             if (ok) {
                 return true;
             }
@@ -416,12 +464,34 @@ public class InternalHelperImpl implements IEmiInternal {
         return false;
     }
 
-    /** 产出该材料的**工作台**配方候选：首选 preferred（BoM 默认），再补全部工作台产出配方（跳过分解类）。 */
-    private List<EmiRecipe> workbenchProducers(EmiIngredient content, EmiRecipe preferred) {
-        List<EmiRecipe> out = new ArrayList<>();
-        if (preferred != null && isWorkbenchRecipe(preferred)) {
-            out.add(preferred);
+    /** 产出该材料的配方候选（预计算 perBatch/is2x2，canObtain 直接消费，避免重复查询/计算）。 */
+    private record ProducerEntry(EmiRecipe recipe, long perBatch, boolean is2x2) {
+    }
+
+    /** 产出该材料的**工作台**配方候选：首选 preferred（BoM 默认）前置，其余取缓存（EMI 配方集合会话内静态）。
+     *  防环由祖先栈承担。preferred 不在缓存内（每次单独构建），其余配方按材料键缓存一次。 */
+    private List<ProducerEntry> producersOf(EmiIngredient content, EmiRecipe preferred) {
+        String k = key(content);
+        List<ProducerEntry> cached = producerCache.get(k);
+        if (cached == null) {
+            cached = buildProducers(content);
+            producerCache.put(k, cached);
         }
+        if (preferred != null && isWorkbenchRecipe(preferred)) {
+            List<ProducerEntry> out = new ArrayList<>();
+            out.add(new ProducerEntry(preferred, outputAmount(preferred, content), is2x2Recipe(preferred)));
+            for (ProducerEntry e : cached) {
+                if (e.recipe() != preferred) {
+                    out.add(e);
+                }
+            }
+            return out;
+        }
+        return cached;
+    }
+
+    private List<ProducerEntry> buildProducers(EmiIngredient content) {
+        List<ProducerEntry> out = new ArrayList<>();
         try {
             EmiRecipeManager m = EmiApi.getRecipeManager();
             if (m == null) {
@@ -432,13 +502,14 @@ public class InternalHelperImpl implements IEmiInternal {
                 return out;
             }
             for (EmiRecipe r : m.getRecipesByOutput(stacks.get(0))) {
-                if (r == preferred || !isWorkbenchRecipe(r)) {
+                if (!isWorkbenchRecipe(r)) {
                     continue;
                 }
-                if (isReverse(r, content)) {
-                    continue;
+                long perBatch = outputAmount(r, content);
+                if (perBatch <= 0) {
+                    continue; // 该配方并不产出此材料（如标签候选中的其它配方）→ 对 canObtain 无意义
                 }
-                out.add(r);
+                out.add(new ProducerEntry(r, perBatch, is2x2Recipe(r)));
             }
         } catch (Exception ignored) {
         }
@@ -477,10 +548,12 @@ public class InternalHelperImpl implements IEmiInternal {
 
     private static class Agg {
         final EmiIngredient content;
-        final EmiRecipe recipe;
+        EmiRecipe recipe;
         long need;
         long batch;
         int depth;
+        /** 到达该材料的祖先配方集（EMI 式防环：路径上配方重复即剪枝）。 */
+        Set<EmiRecipe> path = new HashSet<>();
 
         Agg(EmiIngredient content, EmiRecipe recipe) {
             this.content = content;
@@ -488,20 +561,33 @@ public class InternalHelperImpl implements IEmiInternal {
         }
     }
 
-    private void addNeed(Map<String, Agg> aggs, ArrayDeque<String> queue, EmiIngredient content, long delta, int depth) {
+    private void addNeed(Map<String, Agg> aggs, ArrayDeque<String> queue, EmiIngredient content, long delta, int depth,
+            Set<EmiRecipe> forbidden) {
         if (content == null || content.isEmpty() || delta <= 0) {
             return;
         }
         String key = key(content);
         Agg agg = aggs.get(key);
         if (agg == null) {
-            agg = new Agg(content, findRecipe(content));
+            // 创建：叶子判断用"本次需要量"（不是单次 getAmount，避免"背包有 1 个木板就不拆解"）
+            agg = new Agg(content, findRecipe(content, delta, forbidden));
             agg.need = delta;
             agg.depth = depth;
+            agg.path = new HashSet<>(forbidden);
             aggs.put(key, agg);
         } else {
+            long oldNeed = agg.need;
             agg.need += delta;
             agg.depth = Math.min(agg.depth, depth);
+            // 解叶子化：原来是叶子（recipe==null），但累加后总需要量已超过库存 → 重新找配方并展开
+            if (agg.recipe == null && !hasEnough(content, agg.need)) {
+                EmiRecipe r = findRecipe(content, agg.need, agg.path);
+                if (r != null) {
+                    agg.recipe = r;
+                    agg.batch = 0; // 强制重新计算批次并展开子材料
+                    queue.add(key);
+                }
+            }
         }
         queue.add(key);
     }
@@ -565,16 +651,18 @@ public class InternalHelperImpl implements IEmiInternal {
         return 0;
     }
 
-    /** 产出某材料的配方：**只用玩家设为默认 / EMI 数据驱动默认的配方**（BoM.getRecipe 已处理
-     *  取消默认）；跳过"反向/分解类"默认配方（铁块↔铁锭）；**背包已有足够该材料时视为叶子（不拆解）**。 */
-    private EmiRecipe findRecipe(EmiIngredient content) {
-        // 玩家已有足够该材料 → 叶子（如背包有 64 木板，就不拆解到原木）
-        if (hasEnough(content, content.getAmount())) {
+    /** 产出某材料的配方：**只用玩家设为默认 / EMI 数据驱动默认的配方**（BoM.getRecipe 已处理取消默认；
+     *  分解类默认由 EMI 默认数据本身避免，运行时用**祖先配方栈**（forbidden）剪环）；
+     *  **当前屏幕库存已有足够该材料（≥ needAmount 总需要量）时视为叶子（不拆解）**。
+     *  needAmount 用"该材料累计总需要量"而非单次 getAmount——否则背包有 1 个木板就不向下拆解。 */
+    private EmiRecipe findRecipe(EmiIngredient content, long needAmount, Set<EmiRecipe> forbidden) {
+        // 库存 ≥ 总需要量 → 叶子（不需要再合成）
+        if (needAmount > 0 && hasEnough(content, needAmount)) {
             return null;
         }
         try {
             EmiRecipe r = BoM.getRecipe(content);
-            if (r != null && !isReverse(r, content)) {
+            if (r != null && !forbidden.contains(r)) {
                 return r;
             }
         } catch (Exception ignored) {

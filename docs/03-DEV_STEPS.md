@@ -19,7 +19,7 @@
 - [x] **NeoForge 范围放宽** `[21.0.0,)`。
 - [x] **用户 runClient 验收**：栅栏示例布局数字、铁块不循环、标签选择、药水/时长、持久化、滚动、流体 mB、点穿/重叠（✅ 已验收，随 1.0.0 发布）。
 
-## Phase 3 — 自动合成（✅ 完成）
+## Phase 3 — 自动合成（✅ 完成；v1.0.0 服务端方案，v2.0.0 已被 Phase 5 纯客户端取代）
 - [x] 3.1 `network/AutoCraftPayload` + `AutoCraftResultPayload` + `ModPayloads`：C2S `emibettersynthesischain:auto_craft`（recipeId + preferredProducers 默认配方映射 + repeat）；S2C 成功提示。
 - [x] 3.2 客户端：自动合成快捷键（V / Shift+V）+ 悬停检测（树优先/EMI 坐标/槽位兜底）→ 找工作台配方（BoM 优先）→ 发包 + 沿链收集默认配方映射；非工作台配方静默。
 - [x] 3.3 服务端 `AutoCraftHandler` + `AutoCraftChain`：资格（CraftingRecipe）→ 2×2/3×3+**打开工作台界面**（containerMenu=CraftingMenu，先查）→ **完整链条递归确保材料**（循环≤12，缺多少合多少批，含 tag 成员，深度≤6，中间 3×3 同样需打开工作台界面，默认配方优先）→ **模拟玩家合成**（材料摆进 2×2/3×3 合成格，assemble 取结果，余料/容器返还背包，材料随格清空）→ 成功提示；打开工作台/背包时走**可见合成链逐步显示**（每步进格→显示→取结果→下一步，关界面中止；V 得最终结果即停，Shift+V 连续合成）。
@@ -29,6 +29,37 @@
 
 ## 发布
 - **v1.0.0**（2026-08-09）：功能全部完成并通过用户验收。构建：`./gradlew build` → BUILD SUCCESSFUL；产物 `build/libs/emibettersynthesischain-1.0.0.jar`。
+
+## Phase 5 — v2.0.0 自动合成改纯客户端（进行中）
+- [x] 5.1 **删除服务端/网络代码**：`server/AutoCraftHandler`、`server/AutoCraftChain`、`network/AutoCraftPayload`、`AutoCraftResultPayload`、`ModPayloads` 整体删除（无自定义包）。
+- [x] 5.2 **CraftInventory**（`client/`）：屏幕感知库存——`handler.getInventory(screen)`（AE2 终端=网络+背包 / 工作台=背包），无 handler 回退玩家背包；供树标红与链条预检。
+- [x] 5.3 **ClientCraftChain**（`client/`）：tick 驱动点击链——EMI handler 定位合成格/输入源/结果槽，`MultiPlayerGameMode.handleInventoryMouseClick` 发 vanilla 点击包（清格→放料→取结果）；V/Shift+V；关界面中止。
+- [x] 5.4 **AutoCraftClient 改造**：找 handler → 无则"该界面不支持自动合成" → 启动链条；删发包/默认配方映射/CraftingScreen 门禁。
+- [x] 5.5 **InternalHelperImpl**：`hasEnough`/`canObtain` 改读 `CraftInventory`（跟随当前界面）；防环由 `isReverse` 换成 **EMI 祖先配方栈**（worklist `Agg.path` + 递归 `ancestors`）。
+- [x] 5.6 注册 `ClientCraftChain.tick()` 到客户端 tick。
+- [ ] 5.7 **用户 runClient 验收**：工作台 3×3 完整链条（红玻璃板）一次 V；背包 2×2（木棍）；箱子界面红字"不支持"；材料不足红字；Shift+V 连续；铁块↔铁锭不循环；EMI 设置页仍生效；（装 AE2 时）合成终端用网络材料合成、树在终端看网络不标红、**结果槽产物可正常取走**（`Ae2Support` CRAFT_ITEM action）。
+
+## Phase 6 — v2.1.0 批量特性（grilling 确认后按序实施）
+- [x] 6.1 **Q1 产物列左右可调**：`Config.treeGoalSide`（默认 right）；`TreeRenderer` 镜像布局；EMI 设置页"产物在右"开关 + lang。
+- [x] 6.2 **Q2 背景透明可调**：`Config.treeBackgroundTransparent`（默认 true）；`TreeRenderer` 透明分支；EMI 设置页开关 + lang。
+- [x] 6.3 **Q3 顶部总材料行**：`TreeData.leafTotal` + `InternalHelperImpl.buildTree` 聚合叶节点 + `TreeRenderer` 首行渲染/高度同步。
+- [x] 6.4 **Q5 Ctrl+V 强制合成**：`AutoCraftClient` 放开 Ctrl；`ClientCraftChain.force` 尽力而为/缺料跳过/静默停。
+- [x] 6.5 **Q4 Shift 开原版 BoMScreen + 左侧缩略条**：`EmiApiMixin` Shift 分支 + 新增 `BoMScreenMixin`（render 缩略条 + mouseClicked 联动 `BoM.setGoal`/`recalculateTree`）。
+- [x] 6.6 **放料改 EMI clientFill + Destination.NONE**：弃用手写逐格放料（右键取一半导致光标堆叠），改用 `EmiRecipeFiller.clientFill(NONE)` 一次性放置全部材料（光标受控、形状感知）；`canFit` 改用 bounding box 判定；`onShowEnd` 取结果后 `clearCursorIfHeld` 清光标。联调验证：工作台 3×3 完整链条成功、连续合成正常。
+- [x] 6.7 **代码清理**：删除手写放料死代码 + 诊断日志，ClientCraftChain 从 563 行精简到 ~280 行。`./gradlew build` SUCCESS。
+- [ ] **Q6 已知问题（本次不修，仅记录）**：`findSource`/`CraftInventory.count` NBT 严格匹配，需 2 个同种且 NBT 不同的物品分两槽时"只放一个就停"。
+
+## Phase 6.5 — v2.1.0 联调修复（2026-08-15）
+- [x] 6.8 **UI**：数字大小可调（`treeNumberScale` + EMI 设置页）；数量缩写扩到 k/M/G/T；数量位置修复（右下角内侧）；总材料行 + 所有材料行超宽换行铺满（不遮挡右侧产物）；左上角拥有量不足红字。
+- [x] 6.9 **数量感知**：`totalNeedOf` 同种多槽聚合；`findRecipe` 叶子化用总 need + 解叶子化；tag 子材料成员递归。修复"背包 1 木板不拆解/同种需多个只合一次"。
+- [x] 6.10 **取产物（模组界面）**：`clickSlot`（menu.slots.indexOf/container+containerSlot 匹配菜单 index）；`takeOutput` 分阶段（QUICK_MOVE 堆叠 → PICKUP → handler.craft fallback）；`onShowEnd` 用背包数量验证取走成功（模组 `output.hasItem` 不刷新不卡链）；click 越界不终止链。
+- [x] 6.11 **精妙背包合成插件**：产物可取走、连续合成继续（`./gradlew build` SUCCESS）。
+- [x] 6.12 **AE2 联动模块**：`CraftingTermSlot.mayPickup()` 恒 false → 改发 `InventoryActionPacket(CRAFT_ITEM)`（AE2 action 机制）；`client/Ae2Support`（`ModList.isLoaded("ae2")` 门禁，未装短路）；取产物后逐格 QUICK_MOVE 清格（防网络补料残留 + 结果槽残留——`clearToPlayerInventory` 不触发 `slotsChanged`）；AE2 菜单验证等待 12 tick 防误重试。
+- [x] 6.13 **精妙背包产物堆叠**：`placeCursorIntoInventory` 优先堆叠到同种未满槽（不再散落空槽）。
+- [x] 6.14 **诊断日志清理**：删除 `ClientCraftChain` 12 处 + `AutoCraftClient` 3 处 EBS INFO 日志（保留 warn/debug）。
+- [x] 6.15 **性能优化（大树卡顿）**：`hasEnough` 复用 `invSnapshot`（一次库存快照，不再每节点重建）；`producerCache`（产出配方候选缓存 + 预计算 perBatch/is2x2）；`TreeRenderer` 拥有量一次快照。`./gradlew build` SUCCESS。
+- [x] 6.16 **数量数字被图标盖（深度测试）**：物品图标 z=32 + 深度测试剔除 z=0 数字 → `pose.translate(z=200)`（同 EMI `renderAmount`）。`./gradlew build` SUCCESS。
+- [ ] 6.15 **用户 runClient 验收（v2.1.0）**：产物列右/左镜像；背景透明；总材料行换行；Shift 开原版 BoMScreen + 缩略条联动；Ctrl+V 强制；V 只在树最终产物生效；数量缩写/拥有量/数字大小；原版工作台完整链条 + 连续合成；精妙背包/模组界面取产物。
 
 ## Phase 4（后续迭代，未列入 1.0.0）
 - 树节点 tooltip 明细；单次合成数量可配置；树面板拖动调宽。

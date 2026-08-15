@@ -151,6 +151,14 @@ dependencies {
     compileOnly emiJar
     localRuntime emiJar
 
+    // AE2 (Applied Energistics 2) is an optional mod dependency for the crafting-terminal
+    // take-output integration (CraftingTermSlot.mayPickup() is always false, so vanilla
+    // click packets cannot take the result; we send AE2's InventoryActionPacket instead).
+    // Same local-jar approach as EMI: compileOnly here, the mod jar itself stays in run/mods
+    // for runtime (moddev loads it automatically). Never bundled/published.
+    def ae2Jar = files("libs/appliedenergistics2-19.2.17.jar")
+    compileOnly ae2Jar
+
 }
 
 // This block of code expands all declared replace properties in the specified resource targets.

@@ -9,6 +9,7 @@ import dev.emi.emi.api.stack.EmiIngredient;
  *
  * <ul>
  *   <li>{@code goal}：最终产物（amount = 配方输出量）</li>
+ *   <li>{@code leafTotal}：顶部"底层总材料"行（当前各叶节点聚合法所需量）</li>
  *   <li>{@code directInputs}：目标配方直接输入（amount = 配方消耗量）</li>
  *   <li>{@code rows}：聚合材料行，最深→最浅</li>
  *   <li>{@code byproducts}：副产物（过量产出）</li>
@@ -18,6 +19,7 @@ import dev.emi.emi.api.stack.EmiIngredient;
  */
 public record TreeData(
         TreeItem goal,
+        List<TreeItem> leafTotal,
         List<TreeItem> directInputs,
         List<List<TreeItem>> rows,
         List<EmiIngredient> byproducts) {

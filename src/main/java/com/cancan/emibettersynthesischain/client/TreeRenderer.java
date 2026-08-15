@@ -6,6 +6,7 @@ import java.util.Optional;
 
 import com.cancan.emibettersynthesischain.Config;
 
+import dev.emi.emi.api.recipe.EmiPlayerInventory;
 import dev.emi.emi.api.stack.EmiIngredient;
 import dev.emi.emi.api.stack.EmiStack;
 import dev.emi.emi.api.stack.FluidEmiStack;
@@ -48,6 +49,16 @@ public final class TreeRenderer {
 
     private static int bpGap() {
         return Math.max(2, Config.TREE_BYPRODUCT_GAP.get());
+    }
+
+    /** 图标上数字（数量/拥有量/流体用量）的缩放倍数（EMI 设置页可调）。 */
+    private static float numberScale() {
+        return (float) Math.max(0.25, Config.TREE_NUMBER_SCALE.get());
+    }
+
+    /** Q1: 产物列是否在右侧（Config.TREE_GOAL_SIDE）。 */
+    private static boolean goalOnRight() {
+        return "right".equals(Config.TREE_GOAL_SIDE.get());
     }
 
     /** 命中结果：哪棵树、哪个物品、是否最终产物、标签解析到的具体物品（无则 null）。 */
@@ -97,7 +108,10 @@ public final class TreeRenderer {
         boolean hoverOnTree = hovered != null;
 
         g.enableScissor(px, py, px + pw, py + ph);
-        g.fill(px, py, px + pw, py + ph, 0xCC0B0B0B);
+        // Q2: 背景透明可在设置里开关（默认透明=不画自绘深背景，透出下层；关闭恢复深色）
+        if (!Config.TREE_BACKGROUND_TRANSPARENT.get()) {
+            g.fill(px, py, px + pw, py + ph, 0xCC0B0B0B);
+        }
 
         if (placed.isEmpty()) {
             Font font = Minecraft.getInstance().font;
@@ -107,9 +121,12 @@ public final class TreeRenderer {
         }
 
         EmiDrawContext ctx = EmiDrawContext.wrap(g);
-        int baseFlags = EmiIngredient.RENDER_ICON | EmiIngredient.RENDER_AMOUNT;
+        // 数量不交给 EMI 的 RENDER_AMOUNT（它只显示完整数字），改为自绘小字，支持大数字缩写（K / M）
+        int baseFlags = EmiIngredient.RENDER_ICON;
+        // 拥有量检测共用一个库存快照（每 Placed 每帧重建快照是渲染热点，合成量大时卡顿）
+        EmiPlayerInventory invSnap = CraftInventory.currentScreenInventory();
 
-        drawDividers(g, px, placed);
+        drawDividers(g, px, pw, placed);
         for (Placed p : placed) {
             if (p.y() > py + ph) {
                 continue;
@@ -125,13 +142,10 @@ public final class TreeRenderer {
             } else if (p.kind() == Kind.BYPRODUCT) {
                 g.fill(p.x() - 1, p.y() - 1, p.x() + ICON + 1, p.y() + ICON + 1, 0x22000000);
             }
-            // 标签材料加 RENDER_INGREDIENT → 显示标签徽记；流体去掉 RENDER_AMOUNT（数量用下方文本）
+            // 标签材料加 RENDER_INGREDIENT → 显示标签徽记
             int flags = baseFlags;
             if (p.content() instanceof TagEmiIngredient) {
                 flags |= EmiIngredient.RENDER_INGREDIENT;
-            }
-            if (p.content() instanceof FluidEmiStack) {
-                flags &= ~EmiIngredient.RENDER_AMOUNT;
             }
             ctx.drawStack(p.content(), p.x(), p.y(), flags);
             // 已解析标签：右侧画短连线到"所选物品"（其图标是独立 Placed）
@@ -139,18 +153,47 @@ public final class TreeRenderer {
                 int cy = p.y() + ICON / 2;
                 g.fill(p.x() + ICON, cy, p.x() + ICON + 3, cy + 1, LINE_COLOR);
             }
-            // 流体：用量文本用 0.5 倍小字画在图标格内底部
-            if (p.content() instanceof FluidEmiStack) {
-                long amt = p.content().getAmount();
-                if (amt > 0) {
+            // 数量：自绘小字（缩放倍数可配置），**画在图标格内右下角**。
+            // 物品用 formatItemAmount（支持 k/M/G/T 缩写），流体用 formatFluidAmount（mB / L 单位）。
+            // z 平移到 200：renderFakeItem 物品模型 z=32 且开启深度测试，数字若在 z=0 会被深度测试
+            // 剔除（物品"叠在数字上方"）——z=200 深度更近，保证数字画在图标之上。
+            long amt = p.content().getAmount();
+            if (amt > 1) {
+                String label = p.content() instanceof FluidEmiStack ? formatFluidAmount(amt) : formatItemAmount(amt);
+                if (label != null && !label.isEmpty()) {
+                    float sc = numberScale();
                     Font font = Minecraft.getInstance().font;
-                    String label = formatFluidAmount(amt);
                     var pose = g.pose();
                     pose.pushPose();
-                    pose.translate(p.x(), p.y() + 11, 0);
-                    pose.scale(0.5f, 0.5f, 1f);
-                    g.drawString(font, label, 2, 1, 0xFF88CCFF);
+                    pose.translate(p.x(), p.y(), 200);
+                    pose.scale(sc, sc, 1f);
+                    // 右下角内侧：右边缘 = 图标右 -1、底边缘 = 图标底 -1（缩放后不溢出格）
+                    int labelW = font.width(label);
+                    int textH = font.lineHeight;
+                    int x = (int) Math.ceil((ICON - 1 - labelW) / sc);
+                    int y = (int) Math.ceil((ICON - 1 - textH) / sc);
+                    g.drawString(font, label, x, y,
+                            p.content() instanceof FluidEmiStack ? 0xFF88CCFF : 0xFFFFFFFF);
                     pose.popPose();
+                }
+            }
+            // 左上角：当前拥有量不足时显示拥有量（红字），足够时不显示。仅物品节点（非目标、非流体）。
+            // 同样 z=200 防止被物品图标深度测试剔除。
+            if (p.kind() != Kind.GOAL && !(p.content() instanceof FluidEmiStack)) {
+                try {
+                    long owned = CraftInventory.count(invSnap, p.content());
+                    if (owned < amt) {
+                        float sc = numberScale();
+                        Font font = Minecraft.getInstance().font;
+                        String ownLabel = formatItemAmount(owned);
+                        var pose = g.pose();
+                        pose.pushPose();
+                        pose.translate(p.x(), p.y(), 200);
+                        pose.scale(sc, sc, 1f);
+                        g.drawString(font, ownLabel, 1, 1, 0xFFFF4040);
+                        pose.popPose();
+                    }
+                } catch (Exception ignored) {
                 }
             }
         }
@@ -174,10 +217,20 @@ public final class TreeRenderer {
         }
     }
 
-    /** 所有树的未滚动总内容高度（不含顶部 PAD）。 */
+    /** 所有树的未滚动总内容高度（不含顶部 PAD）。与 {@link #layout} 的物理行数一致。 */
     private static int contentHeight(int px, int py, int pw, List<TreeData> trees) {
         if (trees == null) {
             return 0;
+        }
+        int contentRight = px + pw - SB_LANE;
+        boolean right = goalOnRight();
+        int rowX, matRight;
+        if (right) {
+            rowX = px + PAD;
+            matRight = contentRight - LEFT_COL;
+        } else {
+            rowX = px + PAD + LEFT_COL + 4;
+            matRight = contentRight;
         }
         int y = py + PAD;
         int maxBottom = y;
@@ -186,18 +239,89 @@ public final class TreeRenderer {
                 continue;
             }
             int top = y;
-            // layout 总是把 directInputs 作为最后一行加入，行数一致
-            int rows = tree.rows().size() + 1;
+            // 物理行数 = leafTotal 换行数 + 每层 rows/directInputs 各自换行数（与 layout 一致）
+            int rows = 0;
+            if (tree.leafTotal() != null && !tree.leafTotal().isEmpty()) {
+                rows += rowItemLines(tree.leafTotal(), rowX, matRight);
+            }
+            rows += rowItemLines(tree.directInputs(), rowX, matRight);
+            for (List<TreeData.TreeItem> r : tree.rows()) {
+                rows += rowItemLines(r, rowX, matRight);
+            }
             int byproductY = top + rows * rowH() + bpGap();
             if (!tree.byproducts().isEmpty()) {
                 maxBottom = Math.max(maxBottom, byproductY + ICON);
                 y = byproductY + ICON + treeGap();
             } else {
-                maxBottom = Math.max(maxBottom, top + rows * rowH()); // 树底 = 最后一行底，不叠加 bpGap 幻影
+                maxBottom = Math.max(maxBottom, top + rows * rowH());
                 y = byproductY + treeGap() - bpGap();
             }
         }
         return Math.max(0, maxBottom - (py + PAD));
+    }
+
+    /** 一行物品（可能超宽）换行铺满的**物理行数**（供 contentHeight 用，与 layout 放置一致）。 */
+    private static int rowItemLines(List<TreeData.TreeItem> items, int rowX, int matRight) {
+        if (items == null) {
+            return 0;
+        }
+        int x = rowX;
+        int lines = 1;
+        boolean any = false;
+        boolean lineStart = true;
+        for (TreeData.TreeItem item : items) {
+            if (item == null || item.content() == null || item.content().isEmpty()) {
+                continue;
+            }
+            int step = ICON + itemGap();
+            if (!lineStart && x + step > matRight) {
+                lines++;
+                x = rowX;
+                lineStart = true;
+            }
+            if (x + ICON <= matRight) {
+                lineStart = false;
+            }
+            x += step;
+            if (item.hasResolved()) {
+                x += step;
+            }
+            any = true;
+        }
+        return any ? lines : 0;
+    }
+
+    /** 放置一行物品（可能超宽换行铺满），返回下一物理行的 y。layout 与 rowItemLines 共用同一切换行判定。 */
+    private static int placeRowItems(List<Placed> out, int ti, int rowX, int matRight, int startY,
+            List<TreeData.TreeItem> items) {
+        if (items == null || items.isEmpty()) {
+            return startY; // 空行不占物理行（与 rowItemLines 一致）
+        }
+        int curY = startY;
+        int x = rowX;
+        boolean lineStart = true;
+        for (TreeData.TreeItem item : items) {
+            if (item == null || item.content().isEmpty()) {
+                continue;
+            }
+            int step = ICON + itemGap();
+            if (!lineStart && x + step > matRight) {
+                x = rowX;
+                curY += rowH();
+            }
+            if (x + ICON <= matRight) {
+                out.add(new Placed(ti, x, curY, item.content(), Kind.MATERIAL, item.canCraft(), item.resolvedTo()));
+                lineStart = false;
+            }
+            x += step;
+            if (item.hasResolved()) {
+                if (x + ICON <= matRight) {
+                    out.add(new Placed(ti, x, curY, item.resolvedTo(), Kind.MATERIAL, true, null));
+                }
+                x += step;
+            }
+        }
+        return curY + rowH();
     }
 
     /** 命中测试：返回鼠标位置对应的树/物品。 */
@@ -229,14 +353,26 @@ public final class TreeRenderer {
         return new Scrollbar(trackX, handleY, SB_W, handleH);
     }
 
-    /** 计算所有树中每个物品的屏幕位置（渲染与命中测试共用）。 */
+    /** 计算所有树中每个物品的屏幕位置（渲染与命中测试共用）。产物列位置由 {@link #goalOnRight()} 决定。 */
     private static List<Placed> layout(int px, int py, int pw, List<TreeData> trees, int scroll) {
         List<Placed> out = new ArrayList<>();
         int y = py + PAD - scroll;
-        int goalX = px + PAD;
-        int dividerX = goalX + LEFT_COL;
-        int rowX = dividerX + 4;
         int contentRight = px + pw - SB_LANE;
+        boolean right = goalOnRight();
+        int goalX;
+        int dividerX;
+        int rowX;
+        if (right) {
+            rowX = px + PAD;                        // 产物在右：材料从最左侧排
+            dividerX = contentRight - LEFT_COL;     // 分割线在右
+            goalX = dividerX + 4;                   // 产物贴分割线右侧
+        } else {
+            goalX = px + PAD;                       // 产物在左（原逻辑）
+            dividerX = goalX + LEFT_COL;
+            rowX = dividerX + 4;
+        }
+        // 材料区右界 = 分割线（目标在右时材料不能越过分割线遮挡目标；目标在左时材料可用到面板右边）
+        int matRight = right ? dividerX : contentRight;
         for (int ti = 0; ti < trees.size(); ti++) {
             TreeData tree = trees.get(ti);
             if (tree == null || tree.isEmpty()) {
@@ -246,32 +382,22 @@ public final class TreeRenderer {
             out.add(new Placed(ti, goalX, top, tree.goal().content(), Kind.GOAL, tree.goal().canCraft(),
                     tree.goal().resolvedTo()));
 
-            List<List<TreeData.TreeItem>> allRows = new ArrayList<>(tree.rows());
-            allRows.add(tree.directInputs());
-            for (int r = 0; r < allRows.size(); r++) {
-                int rowY = top + r * rowH();
-                int x = rowX;
-                for (TreeData.TreeItem item : allRows.get(r)) {
-                    if (item != null && !item.content().isEmpty() && x + ICON <= contentRight) {
-                        out.add(new Placed(ti, x, rowY, item.content(), Kind.MATERIAL, item.canCraft(),
-                                item.resolvedTo()));
-                    }
-                    x += ICON + itemGap();
-                    if (item != null && item.hasResolved()) {
-                        // 所选物品占用下一个正常格子（连线的另一头），可点击
-                        if (x + ICON <= contentRight) {
-                            out.add(new Placed(ti, x, rowY, item.resolvedTo(), Kind.MATERIAL, true, null));
-                        }
-                        x += ICON + itemGap();
-                    }
-                }
+            // 材料区从目标行（top）开始：leafTotal → 原分层 rows → directInputs，每行超宽自动换行铺满
+            int curY = top;
+            if (tree.leafTotal() != null && !tree.leafTotal().isEmpty()) {
+                curY = placeRowItems(out, ti, rowX, matRight, curY, tree.leafTotal());
+            }
+            List<List<TreeData.TreeItem>> restRows = new ArrayList<>(tree.rows());
+            restRows.add(tree.directInputs());
+            for (List<TreeData.TreeItem> rowItems : restRows) {
+                curY = placeRowItems(out, ti, rowX, matRight, curY, rowItems);
             }
 
-            int byproductY = top + allRows.size() * rowH() + bpGap();
+            int byproductY = curY + bpGap();
             if (!tree.byproducts().isEmpty()) {
                 int bx = rowX;
                 for (EmiIngredient bp : tree.byproducts()) {
-                    if (bx + ICON <= contentRight) {
+                    if (bx + ICON <= matRight) {
                         out.add(new Placed(ti, bx, byproductY, bp, Kind.BYPRODUCT, true, null));
                     }
                     bx += ICON + itemGap();
@@ -285,8 +411,9 @@ public final class TreeRenderer {
     }
 
     /** 分割线：目标列与材料区之间的竖线，以及副产物区上方的横线。 */
-    private static void drawDividers(GuiGraphics g, int px, List<Placed> placed) {
-        int dividerX = px + PAD + LEFT_COL;
+    private static void drawDividers(GuiGraphics g, int px, int pw, List<Placed> placed) {
+        int contentRight = px + pw - SB_LANE;
+        int dividerX = goalOnRight() ? (contentRight - LEFT_COL) : (px + PAD + LEFT_COL);
         int i = 0;
         while (i < placed.size()) {
             int ti = placed.get(i).treeIndex();
@@ -310,6 +437,30 @@ public final class TreeRenderer {
             }
             i = j;
         }
+    }
+
+    /** 物品数量大数字缩写（1000 进制多级）：<1000 原样；≥1k / ≥1M / ≥1G / ≥1T。一位小数去尾零。 */
+    private static String formatItemAmount(long v) {
+        if (v < 1000) {
+            return String.valueOf(v);
+        }
+        double d = v;
+        String[] units = {"k", "M", "G", "T"};
+        int u = -1;
+        while (d >= 1000.0 && u < units.length - 1) {
+            d /= 1000.0;
+            u++;
+        }
+        return trim1(d) + units[Math.max(0, u)];
+    }
+
+    /** 一位小数去尾零（整数则去掉 .0）。 */
+    private static String trim1(double d) {
+        String s = String.format(java.util.Locale.ROOT, "%.1f", d);
+        if (s.endsWith(".0")) {
+            return s.substring(0, s.length() - 2);
+        }
+        return s;
     }
 
     private static final String[] FLUID_UNITS = {"L", "K L", "M L", "G L"};

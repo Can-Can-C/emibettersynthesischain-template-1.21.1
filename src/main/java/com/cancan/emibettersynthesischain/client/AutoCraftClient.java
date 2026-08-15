@@ -1,8 +1,6 @@
 package com.cancan.emibettersynthesischain.client;
 
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 import com.cancan.emibettersynthesischain.Config;
 import com.cancan.emibettersynthesischain.EMIBettersynthesischain;
@@ -11,40 +9,30 @@ import com.cancan.emibettersynthesischain.client.InternalHelperImpl;
 import com.cancan.emibettersynthesischain.client.TreeMode;
 import com.cancan.emibettersynthesischain.client.TreeRenderer;
 import com.cancan.emibettersynthesischain.mixin.AbstractContainerScreenAccessor;
-import com.cancan.emibettersynthesischain.network.AutoCraftPayload;
 
 import dev.emi.emi.api.EmiApi;
 import dev.emi.emi.api.recipe.EmiRecipe;
 import dev.emi.emi.api.recipe.EmiRecipeManager;
-import dev.emi.emi.api.stack.EmiIngredient;
 import dev.emi.emi.api.stack.EmiStack;
 import dev.emi.emi.api.stack.EmiStackInteraction;
-import dev.emi.emi.api.stack.TagEmiIngredient;
 import dev.emi.emi.api.widget.Bounds;
 import dev.emi.emi.bom.BoM;
+import dev.emi.emi.registry.EmiRecipeFiller;
 import dev.emi.emi.screen.EmiScreenManager;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
-import net.minecraft.client.gui.screens.inventory.CraftingScreen;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.entity.player.Inventory;
-import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.CraftingRecipe;
-import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.item.crafting.RecipeHolder;
-import net.minecraft.world.item.crafting.ShapedRecipe;
-import net.minecraft.world.item.crafting.ShapelessRecipe;
 import net.neoforged.neoforge.client.event.InputEvent;
-import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
- * 自动合成客户端：悬停物品 + 快捷键（原始按键事件，仿 EMI 的绑定检测）→ 找"产出该物品的工作台配方" → 发包。
+ * 自动合成客户端：悬停物品 + 快捷键（原始按键事件，仿 EMI 的绑定检测）→ 找"产出该物品的工作台配方"
+ * → 用当前界面的 EMI handler 启动纯客户端点击链（ClientCraftChain）。
  */
 public final class AutoCraftClient {
     public static final KeyMapping KEY = new KeyMapping(
@@ -55,7 +43,7 @@ public final class AutoCraftClient {
     }
 
     /** 仿 EMI：事件驱动，比较原始 keyCode（不用 KeyMapping.consumeClick，其在屏幕内不可靠）。
-     *  V=合成一次（得最终结果即停）；Shift+V=连续合成（一直合到材料用完）。 */
+     *  V=合成一次（得最终结果即停）；Shift+V=连续合成（一直合到材料用完）；Ctrl+V=强制合成（尽力而为）。 */
     public static void onKeyInput(InputEvent.Key event) {
         if (event.getAction() != org.lwjgl.glfw.GLFW.GLFW_PRESS) {
             return;
@@ -65,15 +53,15 @@ public final class AutoCraftClient {
         }
         int mods = event.getModifiers();
         boolean repeat = mods == org.lwjgl.glfw.GLFW.GLFW_MOD_SHIFT;
+        boolean force = mods == org.lwjgl.glfw.GLFW.GLFW_MOD_CONTROL;
         boolean plain = mods == 0;
-        if (!plain && !repeat) {
-            return; // 只响应 V 或 Shift+V，排除 Ctrl+V 等
+        if (!plain && !repeat && !force) {
+            return; // 只响应 V / Shift+V / Ctrl+V，排除其它修饰组合
         }
-        EMIBettersynthesischain.LOGGER.info("EBS auto-craft key pressed{}", repeat ? " (repeat)" : "");
-        attemptAutoCraft(repeat);
+        attemptAutoCraft(repeat, force);
     }
 
-    private static void attemptAutoCraft(boolean repeat) {
+    private static void attemptAutoCraft(boolean repeat, boolean force) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || !(mc.screen instanceof AbstractContainerScreen<?>)) {
             return;
@@ -82,24 +70,32 @@ public final class AutoCraftClient {
             return; // 正在输入文字，不触发
         }
         ItemStack hovered = getHoveredStack();
-        EMIBettersynthesischain.LOGGER.info("EBS auto-craft hovered: {}", hovered.isEmpty() ? "EMPTY" : hovered.toString());
         if (hovered.isEmpty()) {
             showFail("请先悬停要合成的物品");
             return;
         }
         EmiRecipe recipe = findCraftingRecipe(hovered);
         RecipeHolder<?> holder = recipe == null ? null : recipe.getBackingRecipe();
-        if (holder == null || !(holder.value() instanceof CraftingRecipe crafting)) {
+        if (holder == null || !(holder.value() instanceof CraftingRecipe)) {
             showFail("该物品无法自动合成（仅工作台配方）");
             return;
         }
-        // 3×3 目标需**打开工作台界面**（服务端同样校验 containerMenu 为 CraftingMenu）
-        if (!is2x2Craft(crafting) && !(mc.screen instanceof CraftingScreen)) {
-            showFail("3×3 配方需打开工作台界面");
+        // 纯客户端：需要当前界面有 EMI handler（工作台/背包/AE2 终端/注册过 handler 的模组机器）
+        if (!hasHandler(recipe)) {
+            showFail("该界面不支持自动合成");
             return;
         }
-        EMIBettersynthesischain.LOGGER.info("EBS auto-craft sending recipe {}", holder.id());
-        PacketDistributor.sendToServer(new AutoCraftPayload(holder.id(), collectPreferredProducers(recipe), repeat));
+        ClientCraftChain.start(recipe, repeat, force);
+    }
+
+    /** 当前界面是否注册了支持该配方的 EMI handler（纯客户端可合成的前提）。 */
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static boolean hasHandler(EmiRecipe recipe) {
+        Minecraft mc = Minecraft.getInstance();
+        if (!(mc.screen instanceof AbstractContainerScreen)) {
+            return false;
+        }
+        return EmiRecipeFiller.getFirstValidHandler(recipe, (AbstractContainerScreen) mc.screen) != null;
     }
 
     /** 无法合成的红字提示（可在 EMI 设置页关闭）。 */
@@ -109,116 +105,13 @@ public final class AutoCraftClient {
         }
     }
 
-    /** 是否 2×2 配方（Shapeless 输入≤4 / Shaped 宽高≤2）；非工作台配方返回 false。 */
-    private static boolean is2x2Craft(CraftingRecipe crafting) {
-        if (crafting instanceof ShapelessRecipe shapeless) {
-            return shapeless.getIngredients().size() <= 4;
-        }
-        if (crafting instanceof ShapedRecipe shaped) {
-            return shaped.getWidth() <= 2 && shaped.getHeight() <= 2;
-        }
-        return false;
-    }
-
-    /** 收集链上各材料的默认配方（客户端 EMI BoM，尊重玩家设的默认）→ "材料键 → 配方 id"。 */
-    private static Map<ResourceLocation, ResourceLocation> collectPreferredProducers(EmiRecipe goalRecipe) {
-        Map<ResourceLocation, ResourceLocation> out = new HashMap<>();
-        collectPreferred(goalRecipe, out, 0);
-        return out;
-    }
-
-    private static void collectPreferred(EmiRecipe recipe, Map<ResourceLocation, ResourceLocation> out, int depth) {
-        if (depth > 6) {
-            return;
-        }
-        for (EmiIngredient input : recipe.getInputs()) {
-            if (input == null || input.isEmpty()) {
-                continue;
-            }
-            ResourceLocation key = ingredientKey(input);
-            if (key == null || out.containsKey(key)) {
-                continue;
-            }
-            EmiRecipe producer = null;
-            try {
-                producer = BoM.getRecipe(input);
-            } catch (Exception ignored) {
-            }
-            if (producer == null || !isWorkbenchCraft(producer)) {
-                continue;
-            }
-            RecipeHolder<?> holder = producer.getBackingRecipe();
-            if (holder != null) {
-                out.put(key, holder.id());
-                collectPreferred(producer, out, depth + 1);
-            }
-        }
-    }
-
-    /** 材料键（与服务端一致）：标签用 tag:id，否则物品注册表 id。 */
-    private static ResourceLocation ingredientKey(EmiIngredient input) {
-        try {
-            if (input instanceof TagEmiIngredient tag) {
-                ResourceLocation loc = tag.key.location();
-                return loc == null ? null : loc;
-            }
-            List<EmiStack> stacks = input.getEmiStacks();
-            if (!stacks.isEmpty()) {
-                ItemStack s = stacks.get(0).getItemStack();
-                if (s != null && !s.isEmpty()) {
-                    return BuiltInRegistries.ITEM.getKey(s.getItem());
-                }
-            }
-        } catch (Exception ignored) {
-        }
-        return null;
-    }
-
     private static ItemStack getHoveredStack() {
-        Minecraft mc = Minecraft.getInstance();
-        // 1) 树模式：鼠标在树节点上 → 用该节点物品（最终产物/中间材料均可自动合成）
-        if (TreeMode.isActive()) {
-            ItemStack treeStack = getTreeHoveredStack();
-            if (!treeStack.isEmpty()) {
-                return treeStack;
-            }
-        }
-        if (!(mc.screen instanceof AbstractContainerScreen<?> container)) {
+        // V 键只在**树模式下、悬停合成树最终产物**时生效；
+        // 非树模式或任何其它位置（物品栏/收藏夹/EMI 悬停等）按 V 都无反应
+        if (!TreeMode.isActive()) {
             return ItemStack.EMPTY;
         }
-        double scale = mc.getWindow().getGuiScale();
-        int mx = (int) Math.round(mc.mouseHandler.xpos() / scale);
-        int my = (int) Math.round(mc.mouseHandler.ypos() / scale);
-        EMIBettersynthesischain.LOGGER.info("EBS auto-craft mouse at ({},{})", mx, my);
-        // 2) 仿 EMI keyPressed：用当前鼠标坐标取 EMI 悬停
-        try {
-            EmiStackInteraction inter = EmiScreenManager.getHoveredStack(mx, my, true, false);
-            if (inter != null && !inter.isEmpty()) {
-                var stacks = inter.getStack().getEmiStacks();
-                if (!stacks.isEmpty()) {
-                    ItemStack s = stacks.get(0).getItemStack();
-                    if (s != null && !s.isEmpty()) {
-                        return s;
-                    }
-                }
-            }
-        } catch (Exception ignored) {
-        }
-        // 3) 兜底：直接遍历容器菜单槽位
-        try {
-            AbstractContainerScreenAccessor acc = (AbstractContainerScreenAccessor) (Object) container;
-            int leftPos = acc.ebs$leftPos();
-            int topPos = acc.ebs$topPos();
-            for (Slot slot : container.getMenu().slots) {
-                int sx = leftPos + slot.x;
-                int sy = topPos + slot.y;
-                if (mx >= sx && mx < sx + 16 && my >= sy && my < sy + 16 && slot.hasItem()) {
-                    return slot.getItem();
-                }
-            }
-        } catch (Exception ignored) {
-        }
-        return ItemStack.EMPTY;
+        return getTreeHoveredStack();
     }
 
     /** 树模式下，鼠标所在树节点对应的物品（最终产物/材料；标签取首个成员；流体返回空）。 */
@@ -236,6 +129,10 @@ public final class AutoCraftClient {
             TreeRenderer.Hit hit = TreeRenderer.hitTest(bounds.x(), bounds.y(), bounds.width(), bounds.height(),
                     helper.buildTrees(), mx, my);
             if (hit == null || hit.content() == null || hit.content().isEmpty()) {
+                return ItemStack.EMPTY;
+            }
+            // V 键只对合成树中的**最终产物**（goal）有效——中间材料/副产物不可自动合成
+            if (!hit.isGoal()) {
                 return ItemStack.EMPTY;
             }
             // 已解析标签 → 用玩家选择的物品
@@ -260,7 +157,7 @@ public final class AutoCraftClient {
                 if (r == null) {
                     continue;
                 }
-                if (canCraftRecipe(r)) {
+                if (CraftInventory.canCraft(r)) {
                     return s;
                 }
                 if (fallback.isEmpty()) {
@@ -298,40 +195,5 @@ public final class AutoCraftClient {
     private static boolean isWorkbenchCraft(EmiRecipe recipe) {
         RecipeHolder<?> holder = recipe.getBackingRecipe();
         return holder != null && holder.value() instanceof CraftingRecipe;
-    }
-
-    /** 客户端材料是否充足（只查材料，不管格子大小）。 */
-    private static boolean canCraftRecipe(EmiRecipe recipe) {
-        RecipeHolder<?> holder = recipe.getBackingRecipe();
-        if (holder == null || !(holder.value() instanceof CraftingRecipe crafting)) {
-            return false;
-        }
-        Player player = Minecraft.getInstance().player;
-        if (player == null) {
-            return false;
-        }
-        Inventory inv = player.getInventory();
-        int[] available = new int[inv.items.size()];
-        for (int i = 0; i < inv.items.size(); i++) {
-            available[i] = inv.items.get(i).getCount();
-        }
-        for (Ingredient ing : crafting.getIngredients()) {
-            if (ing.isEmpty()) {
-                continue;
-            }
-            boolean found = false;
-            for (int i = 0; i < inv.items.size(); i++) {
-                ItemStack s = inv.items.get(i);
-                if (available[i] > 0 && !s.isEmpty() && ing.test(s)) {
-                    available[i]--;
-                    found = true;
-                    break;
-                }
-            }
-            if (!found) {
-                return false;
-            }
-        }
-        return true;
     }
 }

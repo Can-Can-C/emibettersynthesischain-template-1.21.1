@@ -3,6 +3,7 @@ package com.cancan.emibettersynthesischain;
 import org.lwjgl.glfw.GLFW;
 
 import com.cancan.emibettersynthesischain.client.AutoCraftClient;
+import com.cancan.emibettersynthesischain.client.ClientCraftChain;
 import com.cancan.emibettersynthesischain.client.IEmiInternal;
 import com.cancan.emibettersynthesischain.client.InternalHelperImpl;
 import com.cancan.emibettersynthesischain.client.TreeManager;
@@ -19,6 +20,7 @@ import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
+import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.InputEvent;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
 import net.neoforged.neoforge.client.gui.ConfigurationScreen;
@@ -36,10 +38,16 @@ public class EMIBettersynthesischainClient {
         container.registerExtensionPoint(IConfigScreenFactory.class, ConfigurationScreen::new);
         NeoForge.EVENT_BUS.addListener(EMIBettersynthesischainClient::onMouseButton);
         NeoForge.EVENT_BUS.addListener(EMIBettersynthesischainClient::onKeyInput);
+        NeoForge.EVENT_BUS.addListener(EMIBettersynthesischainClient::onClientTick);
     }
 
     static void onKeyInput(InputEvent.Key event) {
         AutoCraftClient.onKeyInput(event);
+    }
+
+    /** 纯客户端自动合成链的 tick 推进（点击序列、等待、下一步）。 */
+    static void onClientTick(ClientTickEvent.Post event) {
+        ClientCraftChain.tick();
     }
 
     @SubscribeEvent

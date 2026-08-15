@@ -8,6 +8,7 @@
     "AbstractContainerScreenAccessor",
     "AbstractContainerScreenMixin",
     "BoMFlagMixin",
+    "BoMScreenMixin",
     "ConfigScreenMixin",
     "EmiApiMixin",
     "EmiScreenManagerMixin",
