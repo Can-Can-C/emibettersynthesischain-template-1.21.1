@@ -167,11 +167,12 @@ public final class TreeRenderer {
                     pose.pushPose();
                     pose.translate(p.x(), p.y(), 200);
                     pose.scale(sc, sc, 1f);
-                    // 右下角内侧：右边缘 = 图标右 -1、底边缘 = 图标底 -1（缩放后不溢出格）
+                    // 右下角内侧：在缩放坐标系里把文字右/下边缘对齐到图标格右缘-1/底缘-1。
+                    // 注意公式是 (ICON-1)/sc - 尺寸（先换算到缩放坐标再减），否则文字落在图标中间。
                     int labelW = font.width(label);
                     int textH = font.lineHeight;
-                    int x = (int) Math.ceil((ICON - 1 - labelW) / sc);
-                    int y = (int) Math.ceil((ICON - 1 - textH) / sc);
+                    int x = (int) ((ICON - 1) / sc - labelW);
+                    int y = (int) ((ICON - 1) / sc - textH);
                     g.drawString(font, label, x, y,
                             p.content() instanceof FluidEmiStack ? 0xFF88CCFF : 0xFFFFFFFF);
                     pose.popPose();
