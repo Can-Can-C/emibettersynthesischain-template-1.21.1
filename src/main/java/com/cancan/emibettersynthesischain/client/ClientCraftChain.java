@@ -660,13 +660,16 @@ public final class ClientCraftChain {
     }
 
     /** 取产物验证的等待 tick：AE2 终端每步发 CRAFT_ITEM + 清格最多 10 个包，同步慢，
-     *  用更长等待避免"同步未到 → 误重试 → 多合成一份"；普通界面 4 tick 足够。 */
+     *  用更长等待避免"同步未到 → 误重试 → 多合成一份"；普通界面 2 tick 足够
+     *  （验证失败且 output 空时不会重复合成，只是多一次空循环）。 */
     private int resultRetryTicks() {
-        return Ae2Support.isCraftingTermMenu(menu) ? 12 : 4;
+        return Ae2Support.isCraftingTermMenu(menu) ? 12 : 2;
     }
 
+    /** 材料进格显示时长：直接用设置值（defineInRange 已限定 2-40，不再加隐藏下限，
+     *  否则设置页调到 2 也不生效、合成速度无法最快）。 */
     private static int showTicks() {
-        return Math.max(4, Config.AUTO_CRAFT_SHOW_TICKS.get());
+        return Math.max(2, Config.AUTO_CRAFT_SHOW_TICKS.get());
     }
 
     private static int gapTicks() {
