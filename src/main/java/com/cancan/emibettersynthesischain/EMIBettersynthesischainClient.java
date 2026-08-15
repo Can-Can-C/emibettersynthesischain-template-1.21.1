@@ -25,6 +25,7 @@ import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.InputEvent;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
+import net.neoforged.neoforge.client.event.ScreenEvent;
 import net.neoforged.neoforge.client.gui.ConfigurationScreen;
 import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
 import net.neoforged.neoforge.common.NeoForge;
@@ -36,6 +37,10 @@ import net.neoforged.neoforge.common.NeoForge;
 public class EMIBettersynthesischainClient {
     /** 上一 tick 的屏幕：用于检测"本次点击是否刚打开/关闭了界面"（如右键方块打开容器）。 */
     private static Screen lastScreen;
+    /** 界面切换标志：ScreenEvent.Opening/Closing 置位，下一次鼠标 PRESS 跳过树交互。
+     *  根因：关闭界面时 EMI 侧边栏 bounds 可能残留旧值，下一次打开界面时 getFavoritesPanelBounds()
+     *  返回过期面板 → 鼠标坐标（方块处）可能命中树图标误删。 */
+    private static boolean screenTransition = false;
 
     public EMIBettersynthesischainClient(ModContainer container) {
         // Allows NeoForge to create a config screen for this mod's configs.
@@ -44,6 +49,16 @@ public class EMIBettersynthesischainClient {
         NeoForge.EVENT_BUS.addListener(EMIBettersynthesischainClient::onMouseButton);
         NeoForge.EVENT_BUS.addListener(EMIBettersynthesischainClient::onKeyInput);
         NeoForge.EVENT_BUS.addListener(EMIBettersynthesischainClient::onClientTick);
+        NeoForge.EVENT_BUS.addListener(EMIBettersynthesischainClient::onScreenOpening);
+        NeoForge.EVENT_BUS.addListener(EMIBettersynthesischainClient::onScreenClosing);
+    }
+
+    static void onScreenOpening(ScreenEvent.Opening event) {
+        screenTransition = true;
+    }
+
+    static void onScreenClosing(ScreenEvent.Closing event) {
+        screenTransition = true;
     }
 
     static void onKeyInput(InputEvent.Key event) {
@@ -90,9 +105,10 @@ public class EMIBettersynthesischainClient {
         if (event.getAction() != GLFW.GLFW_PRESS) {
             return;
         }
-        // 本次点击刚打开/关闭了界面（如右键方块打开容器：Post 事件在 vanilla 打开界面后触发，
-        // 此时 bounds 已是容器界面的侧边栏，鼠标坐标可能恰好落在某树图标上）→ 跳过树交互，防误删。
-        if (Minecraft.getInstance().screen != lastScreen) {
+        // 界面切换中（本次或上次点击刚打开/关闭了界面）：EMI 侧边栏 bounds 可能仍是过期值，
+        // 直接跳过树交互，防误删/误开配方。
+        if (screenTransition || Minecraft.getInstance().screen != lastScreen) {
+            screenTransition = false;
             lastScreen = Minecraft.getInstance().screen;
             return;
         }
