@@ -23,7 +23,7 @@
 
 ## [2.1.0-updates] - 2026-08-15
 
-v2.1.0 之后的联调修复与增强（仍为 2.1.0）。
+v2.1.0 之后的联调修复与增强（仍为 2.1.0）。**2026-08-15 用户 runClient 验收全部通过。**
 
 ### 功能
 - **AE2 合成终端取产物**：结果槽 `CraftingTermSlot` 无法用 vanilla 点击取走（`mayPickup` 恒 false）→ 走 AE2 action 机制（`InventoryActionPacket` CRAFT_ITEM，可选依赖 `libs/appliedenergistics2-19.2.17.jar`，未装 AE2 自动跳过）。

@@ -123,3 +123,4 @@
 | 2026-08-15 | **数字位置修正**：数量/拥有量自绘小字右/下边缘按 `(ICON-1)/sc - 尺寸` 对齐图标格右下角内侧（此前公式错误落到图标中间）；**合成速度优化**：`autoCraftShowTicks` 移除隐藏 4 tick 下限（设置完全生效）、取产物验证等待 4→2 tick，最快约 0.2s/步 |
 | 2026-08-15 | **右键删树防误触（三层）**：① 鼠标须在收藏面板内（`bounds.contains`）；② 点击刚打开/关闭界面（`lastScreen` 比较）跳过；③ `ScreenEvent.Opening/Closing` 置位 `screenTransition`，界面切换后的下一次 PRESS 跳过——修复"关闭容器界面时 EMI 侧边栏 bounds 残留、下次打开界面误删树" |
 | 2026-08-15 | **非工作台配方拦截**：链条中间产物 `findProducerToCraft` 仅接受工作台配方（`isWorkbenchRecipe`），非工作台默认配方（如熔炉）不再放料进合成格；`canFitCurrentGrid` 非工作台一律拒绝；提示**"该配方无法在工作台内进行"**（区别于"材料不足"） |
+| 2026-08-15 | **v2.1.0 用户 runClient 验收通过**（5.7 + 6.15 全部验证点）；构建 BUILD SUCCESSFUL，产物 `emibettersynthesischain-2.1.0.jar` |

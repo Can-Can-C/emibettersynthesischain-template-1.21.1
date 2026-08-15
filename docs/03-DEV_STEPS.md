@@ -30,14 +30,14 @@
 ## 发布
 - **v1.0.0**（2026-08-09）：功能全部完成并通过用户验收。构建：`./gradlew build` → BUILD SUCCESSFUL；产物 `build/libs/emibettersynthesischain-1.0.0.jar`。
 
-## Phase 5 — v2.0.0 自动合成改纯客户端（进行中）
+## Phase 5 — v2.0.0 自动合成改纯客户端（✅ 完成）
 - [x] 5.1 **删除服务端/网络代码**：`server/AutoCraftHandler`、`server/AutoCraftChain`、`network/AutoCraftPayload`、`AutoCraftResultPayload`、`ModPayloads` 整体删除（无自定义包）。
 - [x] 5.2 **CraftInventory**（`client/`）：屏幕感知库存——`handler.getInventory(screen)`（AE2 终端=网络+背包 / 工作台=背包），无 handler 回退玩家背包；供树标红与链条预检。
 - [x] 5.3 **ClientCraftChain**（`client/`）：tick 驱动点击链——EMI handler 定位合成格/输入源/结果槽，`MultiPlayerGameMode.handleInventoryMouseClick` 发 vanilla 点击包（清格→放料→取结果）；V/Shift+V；关界面中止。
 - [x] 5.4 **AutoCraftClient 改造**：找 handler → 无则"该界面不支持自动合成" → 启动链条；删发包/默认配方映射/CraftingScreen 门禁。
 - [x] 5.5 **InternalHelperImpl**：`hasEnough`/`canObtain` 改读 `CraftInventory`（跟随当前界面）；防环由 `isReverse` 换成 **EMI 祖先配方栈**（worklist `Agg.path` + 递归 `ancestors`）。
 - [x] 5.6 注册 `ClientCraftChain.tick()` 到客户端 tick。
-- [ ] 5.7 **用户 runClient 验收**：工作台 3×3 完整链条（红玻璃板）一次 V；背包 2×2（木棍）；箱子界面红字"不支持"；材料不足红字；Shift+V 连续；铁块↔铁锭不循环；EMI 设置页仍生效；（装 AE2 时）合成终端用网络材料合成、树在终端看网络不标红、**结果槽产物可正常取走**（`Ae2Support` CRAFT_ITEM action）。
+- [x] 5.7 **用户 runClient 验收**：工作台 3×3 完整链条（红玻璃板）一次 V；背包 2×2（木棍）；箱子界面红字"不支持"；材料不足红字；Shift+V 连续；铁块↔铁锭不循环；EMI 设置页仍生效；（装 AE2 时）合成终端用网络材料合成、树在终端看网络不标红、**结果槽产物可正常取走**（`Ae2Support` CRAFT_ITEM action）。**（✅ 已验收 2026-08-15）**
 
 ## Phase 6 — v2.1.0 批量特性（grilling 确认后按序实施）
 - [x] 6.1 **Q1 产物列左右可调**：`Config.treeGoalSide`（默认 right）；`TreeRenderer` 镜像布局；EMI 设置页"产物在右"开关 + lang。
@@ -62,7 +62,10 @@
 - [x] 6.17 **数字位置修正 + 合成速度**：右下角坐标公式 `(ICON-1)/sc - 尺寸`（原公式把尺寸误放分子 → 文字居中）；`showTicks` 移除隐藏 4 tick 下限、取产物验证等待 4→2 tick（最快 0.2s/步）。`./gradlew build` SUCCESS。
 - [x] 6.18 **右键删树防误触（三层）**：面板 `bounds.contains` + `lastScreen` 界面切换检测 + `ScreenEvent` 置位 `screenTransition`——修复"关闭容器界面时 EMI 侧边栏 bounds 残留、下次打开界面误删树"。`./gradlew build` SUCCESS。
 - [x] 6.19 **非工作台配方拦截**：链条仅接受工作台配方（`isWorkbenchRecipe`），非工作台默认配方（如熔炉）不再放料进合成格；提示"该配方无法在工作台内进行"。`./gradlew build` SUCCESS。
-- [ ] 6.15 **用户 runClient 验收（v2.1.0）**：产物列右/左镜像；背景透明；总材料行换行；Shift 开原版 BoMScreen + 缩略条联动；Ctrl+V 强制；V 只在树最终产物生效；数量缩写/拥有量/数字大小；原版工作台完整链条 + 连续合成；精妙背包/模组界面取产物；**新增回归**：AE2 终端取产物+清格、大树流畅度、合成速度、右键开关容器不误删树、非工作台默认配方提示。
+- [x] 6.15 **用户 runClient 验收（v2.1.0）**：产物列右/左镜像；背景透明；总材料行换行；Shift 开原版 BoMScreen + 缩略条联动；Ctrl+V 强制；V 只在树最终产物生效；数量缩写/拥有量/数字大小；原版工作台完整链条 + 连续合成；精妙背包/模组界面取产物；**新增回归**：AE2 终端取产物+清格、大树流畅度、合成速度、右键开关容器不误删树、非工作台默认配方提示。**（✅ 已验收 2026-08-15）**
+
+## 验收与发布
+- **v2.1.0**（2026-08-15）：用户 runClient 验收全部通过（5.7 + 6.15）。构建：`./gradlew build` → BUILD SUCCESSFUL；产物 `build/libs/emibettersynthesischain-2.1.0.jar`。
 
 ## Phase 4（后续迭代，未列入 1.0.0）
 - 树节点 tooltip 明细；单次合成数量可配置；树面板拖动调宽。
