@@ -59,7 +59,10 @@
 - [x] 6.14 **诊断日志清理**：删除 `ClientCraftChain` 12 处 + `AutoCraftClient` 3 处 EBS INFO 日志（保留 warn/debug）。
 - [x] 6.15 **性能优化（大树卡顿）**：`hasEnough` 复用 `invSnapshot`（一次库存快照，不再每节点重建）；`producerCache`（产出配方候选缓存 + 预计算 perBatch/is2x2）；`TreeRenderer` 拥有量一次快照。`./gradlew build` SUCCESS。
 - [x] 6.16 **数量数字被图标盖（深度测试）**：物品图标 z=32 + 深度测试剔除 z=0 数字 → `pose.translate(z=200)`（同 EMI `renderAmount`）。`./gradlew build` SUCCESS。
-- [ ] 6.15 **用户 runClient 验收（v2.1.0）**：产物列右/左镜像；背景透明；总材料行换行；Shift 开原版 BoMScreen + 缩略条联动；Ctrl+V 强制；V 只在树最终产物生效；数量缩写/拥有量/数字大小；原版工作台完整链条 + 连续合成；精妙背包/模组界面取产物。
+- [x] 6.17 **数字位置修正 + 合成速度**：右下角坐标公式 `(ICON-1)/sc - 尺寸`（原公式把尺寸误放分子 → 文字居中）；`showTicks` 移除隐藏 4 tick 下限、取产物验证等待 4→2 tick（最快 0.2s/步）。`./gradlew build` SUCCESS。
+- [x] 6.18 **右键删树防误触（三层）**：面板 `bounds.contains` + `lastScreen` 界面切换检测 + `ScreenEvent` 置位 `screenTransition`——修复"关闭容器界面时 EMI 侧边栏 bounds 残留、下次打开界面误删树"。`./gradlew build` SUCCESS。
+- [x] 6.19 **非工作台配方拦截**：链条仅接受工作台配方（`isWorkbenchRecipe`），非工作台默认配方（如熔炉）不再放料进合成格；提示"该配方无法在工作台内进行"。`./gradlew build` SUCCESS。
+- [ ] 6.15 **用户 runClient 验收（v2.1.0）**：产物列右/左镜像；背景透明；总材料行换行；Shift 开原版 BoMScreen + 缩略条联动；Ctrl+V 强制；V 只在树最终产物生效；数量缩写/拥有量/数字大小；原版工作台完整链条 + 连续合成；精妙背包/模组界面取产物；**新增回归**：AE2 终端取产物+清格、大树流畅度、合成速度、右键开关容器不误删树、非工作台默认配方提示。
 
 ## Phase 4（后续迭代，未列入 1.0.0）
 - 树节点 tooltip 明细；单次合成数量可配置；树面板拖动调宽。

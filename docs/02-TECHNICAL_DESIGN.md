@@ -95,8 +95,9 @@
 
 ### 5.3 交互（EMIBettersynthesischainClient 的 InputEvent.MouseButton.Post）
 - **左键点物品** → `EmiApi.displayRecipes(content)`；点标签 → `RecipeScreen.resolve = tag` + `displayRecipes(tag)`（可选择具体材料）。
-- **左键拖滚动条滑块** → `TreeMode.startDrag/stopDrag`。
+- **左键拖滚动条滑块** → `TreeMode.startDrag/stopDrag`（RELEASE 无条件 stopDrag，拖出面板也能结束）。
 - **右键点最终产物列** → `TreeManager.remove(index)`。
+- **防误触（三层）**：① PRESS 前 `bounds.contains(mx,my)`（鼠标须在收藏面板内）；② `mc.screen != lastScreen`（每 tick 记录）跳过——`InputEvent.MouseButton.Post` 在 vanilla 处理**之后**触发，右键方块打开容器时 bounds 已变；③ `ScreenEvent.Opening/Closing` 置位 `screenTransition`，界面切换后的下一次 PRESS 跳过——覆盖"关闭容器界面时 EMI 侧边栏 bounds 残留过期面板、下次打开界面误删树"的根因（代价：界面切换后第一次树操作被吞，需再点一次）。
 
 ### 5.4 滚轮与悬停屏蔽（EmiScreenManagerMixin）
 - `mouseScrolled`：仅当鼠标在收藏面板（树区）上时 `TreeMode.addScroll(-amount)` + `return true` 消费；否则放行 EMI/原版。
@@ -180,7 +181,9 @@ src/main/java/com/cancan/emibettersynthesischain/
 - `EmiPlayerInventory.canCraft(recipe)`：按 EmiStack 聚合计数干跑，判断直接输入是否足够。
 
 ### 9.3 点击链（ClientCraftChain，tick 驱动）
-- **每步**（目标或中间产物）：`pickNext()`（EMI 祖先栈 finder，数量感知）→ `canFitCurrentGrid`（bounding box）→ `canAfford`（数量感知）→ **`fillViaEmi`**（EMI `clientFill(NONE)` 一次性放料）→ 等 `showTicks` → **取产物（`takeOutput` 分阶段 + 背包数量验证）** → 等 `gapTicks` → 下一步。
+- **每步**（目标或中间产物）：`pickNext()`（EMI 祖先栈 finder，数量感知）→ **`isWorkbenchRecipe` 硬检查**（仅工作台配方）→ `canFitCurrentGrid`（bounding box）→ `canAfford`（数量感知）→ **`fillViaEmi`**（EMI `clientFill(NONE)` 一次性放料）→ 等 `showTicks` → **取产物（`takeOutput` 分阶段 + 背包数量验证）** → 等 `gapTicks` → 下一步。
+- **仅工作台配方（`isWorkbenchRecipe`）**：backingRecipe 必须为 `CraftingRecipe`。目标配方（`AutoCraftClient.findCraftingRecipe`）与中间产物（`findProducerToCraft` 的 `BoM.getRecipe` 结果）都过滤——非工作台默认配方（如玩家把熔炉设为默认）不再放料进合成格；`canFitCurrentGrid` 非 `EmiCraftingRecipe` 一律 false。`pickNext` 返回 null 时用 `hasNonWorkbenchDefault()` 区分原因：目标输入存在非工作台默认 → 红字**"该配方无法在工作台内进行"**；否则"材料不足"。
+- **速度**：`showTicks()` 直接用设置值（`Math.max(2,...)`，移除隐藏 4 tick 下限——此前设置页调到 2 也不生效）；取产物验证等待 `resultRetryTicks()` 普通界面 2 / AE2 12 tick。最快每步 ≈ showTicks(2)+2+gap(0) = 4 tick（0.2s）。
 - **放料（`fillViaEmi`）**：`EmiRecipeFiller.getStacks(handler, recipe, screen, 1)` → `EmiRecipeFiller.clientFill(handler, recipe, screen, stacks, Destination.NONE)` 一次性放料（清格→整堆拾起→精确放入→余料归还，光标受控）。`Destination.NONE`=只放料不移走；`INVENTORY`（放料后把材料移回背包→结果槽空）、`CURSOR`（余料留光标）不可用。
 - **合成格 fit（`canFitCurrentGrid`/`fitsGrid`）**：配方非空输入 bounding box 判定（3×3 shaped 包围盒 ≤ 网格；shapeless 非空数 ≤ 格数），不用 EMI `canFit`（3×3 在 2×2 返回 true 不可靠）。背包 2×2 → 3×3 拦截提示"需打开工作台"。
 - **取产物（`takeOutput` 分阶段，配合 `onShowEnd` 背包数量验证）**：
@@ -201,7 +204,7 @@ src/main/java/com/cancan/emibettersynthesischain/
 - 分解类默认配方由 EMI 默认数据（`recipe_defaults.json`）本身避免；用户强制设为默认时祖先栈保证安全显示。目标配方选择仍保留 `isReverse`（避免把分解配方当目标）。
 
 ### 9.5 消息（MessageOverlay，纯客户端）
-成功"合成成功: X"白字（X = `goalRecipe.getOutputs()` 输出名）；失败红字：该界面不支持自动合成 / 材料不足 / 无法在此界面合成该配方 / 未悬停物品 / 仅工作台配方 / 需打开工作台后合成；受 `autoCraftFailureMessages` 开关控制。
+成功"合成成功: X"白字（X = `goalRecipe.getOutputs()` 输出名）；失败红字：该界面不支持自动合成 / 材料不足 / **该配方无法在工作台内进行**（非工作台默认配方）/ 未悬停物品 / 仅工作台配方 / 需打开工作台后合成；受 `autoCraftFailureMessages` 开关控制。
 
 ### 9.6 健壮性（P2 项，评审后）
 - **`InternalHelperImpl.hasEnough`**：异常路径返回 **`false`**（无法确认足够即按"材料不足"标红，保守处理，不再 `return true` 静默放行掩盖错误）；空物品/流体计数的 `return true` 分支保留（非异常）。

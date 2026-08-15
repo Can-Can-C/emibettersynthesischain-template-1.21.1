@@ -173,5 +173,12 @@
 - **诊断日志清理**（update.md 原待办）：删除 `ClientCraftChain` 全部 EBS INFO 调试日志（chain step/DONE/fillViaEmi/onShowEnd/VERIFIED/pickNext/findProducer）与 `AutoCraftClient` 3 处（key pressed/hovered/starting chain）；保留 warn/debug（click 越界/异常、fallback 失败、quiet stop）。
 - 验证：`./gradlew build` → **BUILD SUCCESSFUL**。
 
+## 已完成（2026-08-15 补，用户反馈修复：数字/速度/右键/非工作台）
+- **数量数字位置（第二轮修正）**：用户反馈"改到物品中间"——右下角公式 `x=(ICON-1-labelW)/sc` 把 `labelW` 误放分子，缩放坐标下实际右缘 = `p.x+11`（非 p.x+15）→ 文字居中。修正为 `x=(ICON-1)/sc-labelW`、`y=(ICON-1)/sc-textH`（先换算到缩放坐标再减尺寸），任意缩放下对齐图标格右下角内侧。
+- **合成速度**：`showTicks()` 原 `Math.max(4,...)` 隐藏下限使设置页调到 2 不生效 → 移除（`Math.max(2,...)`，defineInRange 2-40 已限定）；取产物验证等待 `resultRetryTicks()` 普通界面 4→2 tick（AE2 仍 12）。最快每步 4 tick ≈ 0.2s（showTicks=2 + 验证 2 + gap 0）。
+- **右键删树防误触（三层，用户实测定位根因）**：① PRESS 前 `bounds.contains(mx,my)` 面板边界检查；② `lastScreen`（每 tick 记录）比较——`InputEvent.MouseButton.Post` 在 vanilla 处理**之后**触发，右键方块打开容器时 bounds 已变；③ `ScreenEvent.Opening/Closing` 置位 `screenTransition`，界面切换后的下一次 PRESS 跳过——覆盖**"上一次关闭界面时 EMI 侧边栏 bounds 残留过期面板，下一次打开界面误删树"**的根因（代价：切换后第一次树操作被吞，需再点一次）。
+- **非工作台配方放料拦截**：链条仅接受工作台配方——新增 `isWorkbenchRecipe`（backingRecipe instanceof CraftingRecipe）；`findProducerToCraft` 的 `BoM.getRecipe` 结果非工作台 → null；`placeStep` 硬检查；`canFitCurrentGrid` 非 `EmiCraftingRecipe` 从 true 改 false。`pickNext` 返回 null 时 `hasNonWorkbenchDefault()` 区分：存在非工作台默认配方（如熔炉设为默认）→ 红字**"该配方无法在工作台内进行"**，否则"材料不足"。
+- 验证：`./gradlew build` → **BUILD SUCCESSFUL**。
+
 ## 待办
 - **v2.1.0 用户 runClient 验收**（见 docs/03 5.7 / 6.15）：工作台/背包/箱子/AE2 终端全场景；含本次新增的 AE2 取产物 + 清格 + 性能优化回归。

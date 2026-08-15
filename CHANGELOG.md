@@ -33,10 +33,15 @@ v2.1.0 之后的联调修复与增强（仍为 2.1.0）。
 ### 修复
 - **合成量大时打开工作台卡顿**：树构建 hasEnough 复用一次库存快照（`invSnapshot`）、产出配方候选缓存（`producerCache`）、渲染拥有量一次快照——消除"每节点/每格重建快照"热点。
 - **数量数字被物品图标盖住**：物品图标渲染开启深度测试（z=32），自绘数字改为 z=200 平移（同 EMI `renderAmount` 做法），数字完整显示在图标格内右下角。
+- **数字位置居中**：右下角坐标公式修正为 `(ICON-1)/sc - 尺寸`（原公式把尺寸误放分子，文字落到图标中间）。
 - **AE2 误重试多合成**：AE2 菜单取产物验证等待 4→12 tick（每步发包多，防同步未到误重试）。
+- **合成速度**：`autoCraftShowTicks` 移除隐藏 4 tick 下限（设置完全生效）、取产物验证等待 4→2 tick，最快约 0.2s/步。
+- **右键删树防误触（三层）**：面板边界检查 + `lastScreen` 界面切换检测 + `ScreenEvent` 置位 `screenTransition`——修复"关闭容器界面时 EMI 侧边栏 bounds 残留、下次打开界面误删树"。
+- **非工作台配方放料拦截**：中间产物仅接受工作台配方（`isWorkbenchRecipe`），非工作台默认配方（如熔炉）不再放料进合成格；提示"该配方无法在工作台内进行"（区别于"材料不足"）。
 
 ### 技术
 - 删除 `ClientCraftChain`/`AutoCraftClient` 全部 EBS INFO 调试日志（保留 warn/debug）；`Ae2Support` 用 `ModList.isLoaded("ae2")` 门禁 + 方法体惰性引用 AE2 类。
+- 代码审查清理：删除死 `AbstractContainerScreenAccessor`（mixin+json+import）与未用 `ebs$x/y`；`hasEnough` 去每调用 `ItemStack.copy`；背包变化检测降频（每 5 tick）；`TreeRenderer` 内容高度缓存；`TreeMode` 清理 `scrollToBottom` 残留；`Ae2Support` 收窄 `catch Throwable`→`Exception`。
 
 ## [2.0.0] - 2026-08-09
 
