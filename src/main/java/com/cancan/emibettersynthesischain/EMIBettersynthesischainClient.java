@@ -76,12 +76,16 @@ public class EMIBettersynthesischainClient {
         int mx = helper.getMouseX();
         int my = helper.getMouseY();
 
-        // 松开左键：结束滚动条拖动
+        // 松开左键：结束滚动条拖动（无论鼠标在哪，都必须 stopDrag，防止拖出面板后卡住拖动）
         if (event.getAction() == GLFW.GLFW_RELEASE && event.getButton() == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
             TreeMode.stopDrag();
             return;
         }
         if (event.getAction() != GLFW.GLFW_PRESS) {
+            return;
+        }
+        // 鼠标不在收藏面板内（如右键点方块打开界面、左键点世界）→ 不处理树交互，避免误删树/误开配方
+        if (!bounds.contains(mx, my)) {
             return;
         }
 
