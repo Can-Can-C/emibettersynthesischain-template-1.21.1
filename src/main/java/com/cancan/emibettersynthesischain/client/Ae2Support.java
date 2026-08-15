@@ -58,7 +58,7 @@ public final class Ae2Support {
         try {
             PacketDistributor.sendToServer(new appeng.core.network.serverbound.InventoryActionPacket(
                     appeng.helpers.InventoryAction.CRAFT_ITEM, slotIndex, 0L));
-        } catch (Throwable t) {
+        } catch (Exception t) {
             com.cancan.emibettersynthesischain.EMIBettersynthesischain.LOGGER.warn(
                     "EBS AE2 takeOutput failed: {}", t.toString());
         }
@@ -89,14 +89,14 @@ public final class Ae2Support {
                         try {
                             mc.gameMode.handleInventoryMouseClick(menu.containerId, i, 0,
                                     ClickType.QUICK_MOVE, mc.player);
-                        } catch (Throwable t) {
+                        } catch (Exception t) {
                             com.cancan.emibettersynthesischain.EMIBettersynthesischain.LOGGER.warn(
                                     "EBS AE2 clearCraftingGrid slot {} failed: {}", i, t.toString());
                         }
                     }
                 }
             }
-        } catch (Throwable t) {
+        } catch (Exception t) {
             com.cancan.emibettersynthesischain.EMIBettersynthesischain.LOGGER.warn(
                     "EBS AE2 clearCraftingGrid failed: {}", t.toString());
         }

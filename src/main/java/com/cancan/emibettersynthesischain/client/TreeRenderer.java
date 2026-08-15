@@ -84,7 +84,7 @@ public final class TreeRenderer {
         int viewH = ph - 2 * PAD;
 
         // 用未滚动的总内容高度计算 maxScroll（避免滚动越大 maxScroll 越小的反馈 bug）
-        int contentHeight = contentHeight(px, py, pw, trees);
+        int contentHeight = contentHeightCached(px, py, pw, trees);
         int maxScroll = Math.max(0, contentHeight + 8 - viewH);
         TreeMode.setMaxScroll(maxScroll);
         // 添加新树后自动滚到底部
@@ -217,7 +217,40 @@ public final class TreeRenderer {
         }
     }
 
-    /** 所有树的未滚动总内容高度（不含顶部 PAD）。与 {@link #layout} 的物理行数一致。 */
+    /** 所有树的未滚动总内容高度（不含顶部 PAD）。与 {@link #layout} 的物理行数一致。
+     *  缓存：trees 每次重建引用变化 + Config 值变化即失效（大树上渲染热点，避免每帧全树遍历）。 */
+    private static List<TreeData> cacheTrees;
+    private static int cacheRowH;
+    private static int cacheItemGap;
+    private static int cacheTreeGap;
+    private static int cacheBpGap;
+    private static int cacheGoalSide;
+    private static int cachePx;
+    private static int cachePw;
+    private static int cacheHeight;
+
+    private static int contentHeightCached(int px, int py, int pw, List<TreeData> trees) {
+        int rowH = rowH();
+        int gap = itemGap();
+        int tg = treeGap();
+        int bg = bpGap();
+        int side = goalOnRight() ? 1 : 0;
+        if (trees == cacheTrees && rowH == cacheRowH && gap == cacheItemGap && tg == cacheTreeGap
+                && bg == cacheBpGap && side == cacheGoalSide && px == cachePx && pw == cachePw) {
+            return cacheHeight;
+        }
+        cacheTrees = trees;
+        cacheRowH = rowH;
+        cacheItemGap = gap;
+        cacheTreeGap = tg;
+        cacheBpGap = bg;
+        cacheGoalSide = side;
+        cachePx = px;
+        cachePw = pw;
+        cacheHeight = contentHeight(px, py, pw, trees);
+        return cacheHeight;
+    }
+
     private static int contentHeight(int px, int py, int pw, List<TreeData> trees) {
         if (trees == null) {
             return 0;

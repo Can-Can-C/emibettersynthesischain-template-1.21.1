@@ -159,7 +159,7 @@ src/main/java/com/cancan/emibettersynthesischain/
    ├─ EmiApiMixin / EmiScreenManagerMixin / SidebarPanelMixin
    ├─ RecipeTreeButtonWidgetMixin / RecipeButtonWidgetAccessor / BoMFlagMixin
    ├─ BoMScreenMixin（Shift 开原版 BoMScreen + 左侧产物缩略条联动）
-   ├─ AbstractContainerScreenMixin / AbstractContainerScreenAccessor
+   ├─ AbstractContainerScreenMixin（MessageOverlay 渲染）
    └─ ConfigScreenMixin
 ```
 

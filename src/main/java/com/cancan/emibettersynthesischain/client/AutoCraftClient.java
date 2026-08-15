@@ -8,7 +8,6 @@ import com.cancan.emibettersynthesischain.client.IEmiInternal;
 import com.cancan.emibettersynthesischain.client.InternalHelperImpl;
 import com.cancan.emibettersynthesischain.client.TreeMode;
 import com.cancan.emibettersynthesischain.client.TreeRenderer;
-import com.cancan.emibettersynthesischain.mixin.AbstractContainerScreenAccessor;
 
 import dev.emi.emi.api.EmiApi;
 import dev.emi.emi.api.recipe.EmiRecipe;

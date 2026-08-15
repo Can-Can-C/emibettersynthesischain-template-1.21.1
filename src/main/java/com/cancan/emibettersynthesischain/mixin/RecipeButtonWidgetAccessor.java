@@ -14,10 +14,4 @@ import dev.emi.emi.widget.RecipeButtonWidget;
 public interface RecipeButtonWidgetAccessor {
     @Accessor("recipe")
     EmiRecipe ebs$recipe();
-
-    @Accessor("x")
-    int ebs$x();
-
-    @Accessor("y")
-    int ebs$y();
 }

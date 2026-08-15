@@ -28,6 +28,7 @@ public final class TreeMode {
             maxScroll = 0;
             velocity = 0;
             dragging = false;
+            scrollToBottom = false; // 清理残留的"滚到底"请求，避免下次进入树模式误滚底
         }
     }
 

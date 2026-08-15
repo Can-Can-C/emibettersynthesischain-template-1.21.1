@@ -52,6 +52,7 @@ public class InternalHelperImpl implements IEmiInternal {
     private int lastBoMHash = Integer.MIN_VALUE;
     private int lastInvHash = Integer.MIN_VALUE;
     private int boMCheckCounter = 0;
+    private int invCheckCounter = 0;
     /** 树重建时构建一次的库存快照：hasEnough/canObtain 全部复用，避免每次计数重建快照（性能热点）。 */
     private EmiPlayerInventory invSnapshot;
     /** 产出配方候选缓存：EMI 配方集合会话内静态，按材料键缓存（canObtain 递归热点）。 */
@@ -207,11 +208,15 @@ public class InternalHelperImpl implements IEmiInternal {
                 return;
             }
             int hash = 0;
-            for (ItemStack s : player.getInventory().items) {
-                if (!s.isEmpty()) {
-                    // 组件感知：用 hashItemAndComponents（含 NBT），区分同 item 不同组件（药水/时长/附魔）
-                    hash = hash * 31 + ItemStack.hashItemAndComponents(s);
-                    hash = hash * 31 + s.getCount();
+            // 背包 hash 每 5 tick 算一次（0.25s 微延迟，避免每帧 36 格组件哈希）；菜单类名每帧
+            // （打开/关闭工作台等容器切换要即时触发标红刷新）
+            if (++invCheckCounter % 5 == 0) {
+                for (ItemStack s : player.getInventory().items) {
+                    if (!s.isEmpty()) {
+                        // 组件感知：用 hashItemAndComponents（含 NBT），区分同 item 不同组件（药水/时长/附魔）
+                        hash = hash * 31 + ItemStack.hashItemAndComponents(s);
+                        hash = hash * 31 + s.getCount();
+                    }
                 }
             }
             // 3×3 标红依赖"是否打开工作台界面"，菜单切换也触发刷新
@@ -390,9 +395,14 @@ public class InternalHelperImpl implements IEmiInternal {
             if (amount <= 0) {
                 return true;
             }
-            ItemStack item = firstStack(content);
-            if (item.isEmpty()) {
-                return true; // 流体/不可作为物品计数
+            // 仅判断"是否为可计数的物品"（流体/空不可计数视为足够）；不 copy ItemStack（canObtain 递归热点）
+            List<EmiStack> stacks = content.getEmiStacks();
+            if (stacks.isEmpty()) {
+                return true;
+            }
+            ItemStack item = stacks.get(0).getItemStack();
+            if (item == null || item.isEmpty()) {
+                return true;
             }
             if (invSnapshot != null) {
                 // 树构建期间：复用本次重建的统一快照（避免每个节点每次重建）
