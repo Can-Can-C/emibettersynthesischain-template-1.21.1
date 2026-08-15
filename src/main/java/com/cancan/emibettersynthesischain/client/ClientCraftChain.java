@@ -25,6 +25,8 @@ import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.inventory.RecipeBookMenu;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.crafting.CraftingRecipe;
+import net.minecraft.world.item.crafting.RecipeHolder;
 
 /**
  * 纯客户端自动合成链：tick 驱动，在当前打开界面上用 vanilla 点击包（模拟玩家点击）一步步合成。
@@ -140,6 +142,13 @@ public final class ClientCraftChain {
         }
         currentRecipe = recipe;
         currentIsGoal = (recipe == goalRecipe);
+        // 硬检查：链条只合成**工作台配方**（pickNext 的中间产物也过滤了，这里是防御）。
+        // 非工作台配方（如默认熔炉）放不进合成格，直接停止提示。
+        if (!isWorkbenchRecipe(recipe)) {
+            fail(!force, "无法自动合成：仅工作台配方");
+            done = true;
+            return;
+        }
         if (!canFitCurrentGrid(recipe)) {
             fail(true, "该配方需要更大的合成格（请打开工作台后合成）");
             done = true;
@@ -384,10 +393,20 @@ public final class ClientCraftChain {
         return null;
     }
 
+    /** 该配方是否为**工作台配方**（backingRecipe 为 CraftingRecipe，EMI 的 EmiCraftingRecipe 包装）。
+     *  链条只合成工作台配方：非工作台（熔炉/锻造/模组机器）放不进合成格。 */
+    private static boolean isWorkbenchRecipe(EmiRecipe recipe) {
+        if (recipe == null) {
+            return false;
+        }
+        RecipeHolder<?> holder = recipe.getBackingRecipe();
+        return holder != null && holder.value() instanceof CraftingRecipe;
+    }
+
     /** 当前菜单合成格能否放下该配方（2×2 背包 vs 3×3 工作台）。用配方非空输入 bounding box 判定。 */
     private boolean canFitCurrentGrid(EmiRecipe recipe) {
         if (!(recipe instanceof EmiCraftingRecipe crafting)) {
-            return true;
+            return false; // 非工作台配方（EmiCraftingRecipe）一律不能放进合成格
         }
         int w, h;
         if (menu instanceof RecipeBookMenu rbm) {
@@ -612,7 +631,9 @@ public final class ClientCraftChain {
         } catch (Exception e) {
             producer = null;
         }
-        if (producer == null || ancestors.contains(producer)) {
+        // 只接受**工作台配方**：非工作台（如玩家把熔炉配方设为默认）不能放进合成格，
+        // 视为"该材料无法在链条中合成"（仅工作台配方自动合成）。
+        if (producer == null || ancestors.contains(producer) || !isWorkbenchRecipe(producer)) {
             return null;
         }
         ancestors.add(producer);
