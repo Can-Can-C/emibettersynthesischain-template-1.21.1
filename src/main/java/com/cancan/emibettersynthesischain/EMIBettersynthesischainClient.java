@@ -14,6 +14,8 @@ import dev.emi.emi.api.EmiApi;
 import dev.emi.emi.api.stack.TagEmiIngredient;
 import dev.emi.emi.api.widget.Bounds;
 import dev.emi.emi.screen.RecipeScreen;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.ModContainer;
@@ -32,6 +34,9 @@ import net.neoforged.neoforge.common.NeoForge;
 // You can use EventBusSubscriber to automatically register all static methods in the class annotated with @SubscribeEvent
 @EventBusSubscriber(modid = EMIBettersynthesischain.MODID, value = Dist.CLIENT)
 public class EMIBettersynthesischainClient {
+    /** 上一 tick 的屏幕：用于检测"本次点击是否刚打开/关闭了界面"（如右键方块打开容器）。 */
+    private static Screen lastScreen;
+
     public EMIBettersynthesischainClient(ModContainer container) {
         // Allows NeoForge to create a config screen for this mod's configs.
         // The config screen is accessed by going to the Mods screen > clicking on your mod > clicking on config.
@@ -48,6 +53,7 @@ public class EMIBettersynthesischainClient {
     /** 纯客户端自动合成链的 tick 推进（点击序列、等待、下一步）。 */
     static void onClientTick(ClientTickEvent.Post event) {
         ClientCraftChain.tick();
+        lastScreen = Minecraft.getInstance().screen;
     }
 
     @SubscribeEvent
@@ -82,6 +88,12 @@ public class EMIBettersynthesischainClient {
             return;
         }
         if (event.getAction() != GLFW.GLFW_PRESS) {
+            return;
+        }
+        // 本次点击刚打开/关闭了界面（如右键方块打开容器：Post 事件在 vanilla 打开界面后触发，
+        // 此时 bounds 已是容器界面的侧边栏，鼠标坐标可能恰好落在某树图标上）→ 跳过树交互，防误删。
+        if (Minecraft.getInstance().screen != lastScreen) {
+            lastScreen = Minecraft.getInstance().screen;
             return;
         }
         // 鼠标不在收藏面板内（如右键点方块打开界面、左键点世界）→ 不处理树交互，避免误删树/误开配方

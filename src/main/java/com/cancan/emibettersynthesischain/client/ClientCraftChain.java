@@ -136,7 +136,8 @@ public final class ClientCraftChain {
         }
         EmiRecipe recipe = pickNext();
         if (recipe == null) {
-            fail(!force, "无法自动合成：材料不足");
+            // 区分失败原因：存在非工作台默认配方（熔炉/锻造/机器等，链条不支持）→ 专有提示
+            fail(!force, hasNonWorkbenchDefault() ? "该配方无法在工作台内进行" : "无法自动合成：材料不足");
             done = true;
             return;
         }
@@ -145,7 +146,7 @@ public final class ClientCraftChain {
         // 硬检查：链条只合成**工作台配方**（pickNext 的中间产物也过滤了，这里是防御）。
         // 非工作台配方（如默认熔炉）放不进合成格，直接停止提示。
         if (!isWorkbenchRecipe(recipe)) {
-            fail(!force, "无法自动合成：仅工作台配方");
+            fail(!force, "该配方无法在工作台内进行");
             done = true;
             return;
         }
@@ -619,6 +620,24 @@ public final class ClientCraftChain {
             }
         }
         return goalRecipe;
+    }
+
+    /** 目标链路上是否存在**非工作台默认配方**（如玩家把熔炉配方"设为默认"）→ 链条无法合成该中间材料，
+     *  用于提示"该配方无法在工作台内进行"（区别于单纯的材料不足）。 */
+    private boolean hasNonWorkbenchDefault() {
+        for (EmiIngredient input : goalRecipe.getInputs()) {
+            if (input.isEmpty()) {
+                continue;
+            }
+            try {
+                EmiRecipe r = BoM.getRecipe(input);
+                if (r != null && !isWorkbenchRecipe(r)) {
+                    return true;
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        return false;
     }
 
     private EmiRecipe findProducerToCraft(EmiIngredient ing, int depth) {
