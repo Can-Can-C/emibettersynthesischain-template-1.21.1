@@ -1,5 +1,7 @@
 package com.cancan.emibettersynthesischain;
 
+import com.cancan.emibettersynthesischain.client.TreeColorPreset;
+
 import net.neoforged.neoforge.common.ModConfigSpec;
 
 /**
@@ -22,6 +24,8 @@ public class Config {
     private static final String DEF_TREE_GOAL_SIDE = "right";
     private static final boolean DEF_TREE_BACKGROUND_TRANSPARENT = true;
     private static final double DEF_TREE_NUMBER_SCALE = 0.5;
+    private static final String DEF_TREE_LINE_COLOR = "teal";
+    private static final String DEF_TREE_DIVIDER_COLOR = "teal";
 
     /** 树模式下左侧栏的物品列数（宽度 = 列数×9px + 内边距，越大面板越宽）。 */
     public static final ModConfigSpec.IntValue TREE_SIDEBAR_WIDTH = BUILDER
@@ -74,6 +78,18 @@ public class Config {
                     "0.5 = half size, 1.0 = full size.")
             .defineInRange("treeNumberScale", DEF_TREE_NUMBER_SCALE, 0.25, 1.0);
 
+    /** 合成树线条配色预设（连接线 / 树括号 / 层级序号 / S 标记的亮色）。 */
+    public static final ModConfigSpec.ConfigValue<String> TREE_LINE_COLOR = BUILDER
+            .comment("Color preset of the tree lines: tag links, the tree bracket, level numbers and the S(sum) mark.",
+                    "Presets: teal, blue, purple, white, gold, red, green, gray.")
+            .define("treeLineColor", DEF_TREE_LINE_COLOR, (Object v) -> TreeColorPreset.isKnown((String) v));
+
+    /** 合成树分割线配色预设（目标/材料分割线与副产物横线，取该预设的深色阶）。 */
+    public static final ModConfigSpec.ConfigValue<String> TREE_DIVIDER_COLOR = BUILDER
+            .comment("Color preset of the tree divider lines: goal/materials separator and the byproduct line.",
+                    "Same presets as treeLineColor; uses the deeper shade of the chosen preset.")
+            .define("treeDividerColor", DEF_TREE_DIVIDER_COLOR, (Object v) -> TreeColorPreset.isKnown((String) v));
+
     /** 可见合成链每步材料进格后的显示时长（tick）。 */
     public static final ModConfigSpec.IntValue AUTO_CRAFT_SHOW_TICKS = BUILDER
             .comment("Ticks each crafting step stays visible in the grid (show duration).")
@@ -107,6 +123,8 @@ public class Config {
         TREE_GOAL_SIDE.set(DEF_TREE_GOAL_SIDE);
         TREE_BACKGROUND_TRANSPARENT.set(DEF_TREE_BACKGROUND_TRANSPARENT);
         TREE_NUMBER_SCALE.set(DEF_TREE_NUMBER_SCALE);
+        TREE_LINE_COLOR.set(DEF_TREE_LINE_COLOR);
+        TREE_DIVIDER_COLOR.set(DEF_TREE_DIVIDER_COLOR);
         AUTO_CRAFT_SHOW_TICKS.set(DEF_AUTO_CRAFT_SHOW_TICKS);
         AUTO_CRAFT_GAP_TICKS.set(DEF_AUTO_CRAFT_GAP_TICKS);
         AUTO_CRAFT_FAILURE_MESSAGES.set(DEF_AUTO_CRAFT_FAILURE_MESSAGES);

@@ -5,13 +5,16 @@ import java.util.function.Supplier;
 
 import com.cancan.emibettersynthesischain.Config;
 import com.cancan.emibettersynthesischain.client.ConfigResetButton;
+import com.cancan.emibettersynthesischain.client.TreeColorEnum;
 import com.llamalad7.mixinextras.sugar.Local;
 
+import dev.emi.emi.config.ConfigEnum;
 import dev.emi.emi.screen.ConfigScreen;
 import dev.emi.emi.screen.widget.config.BooleanWidget;
 import dev.emi.emi.screen.widget.config.ConfigEntryWidget;
 import dev.emi.emi.screen.widget.config.ConfigJumpButton;
 import dev.emi.emi.screen.widget.config.ConfigSearch;
+import dev.emi.emi.screen.widget.config.EnumWidget;
 import dev.emi.emi.screen.widget.config.GroupNameWidget;
 import dev.emi.emi.screen.widget.config.IntWidget;
 import dev.emi.emi.screen.widget.config.ListWidget;
@@ -85,6 +88,9 @@ public abstract class ConfigScreenMixin extends Screen {
                 Config.TREE_BACKGROUND_TRANSPARENT, root, tree);
         // 数字大小（数量/拥有量/流体用量缩放，用百分比 25-100 表示）
         addNumberScale(list, self, searchFn, root, tree);
+        // 线条配色（预设下拉）：连接线/括号/序号/分割线
+        addColor(list, self, searchFn, "ebs.config.tree.lineColor", Config.TREE_LINE_COLOR, root, tree);
+        addColor(list, self, searchFn, "ebs.config.tree.dividerColor", Config.TREE_DIVIDER_COLOR, root, tree);
 
         // ---- 自动合成 ----
         SubGroupNameWidget craft = new SubGroupNameWidget("ebs.autoCraft",
@@ -178,6 +184,26 @@ public abstract class ConfigScreenMixin extends Screen {
                         Config.save();
                     }
                 });
+        addToGroups(list, w, root, sub);
+    }
+
+    /** 线条配色（预设下拉）：映射 Config 的预设 id 字符串（经 TreeColorEnum 适配 ConfigEnum）。 */
+    @Unique
+    private static void addColor(ListWidget list, ConfigScreen self, Supplier<String> searchFn, String key,
+            ModConfigSpec.ConfigValue<String> value, GroupNameWidget root, SubGroupNameWidget sub) {
+        EnumWidget w = new EnumWidget(Component.translatable(key), List.of(), searchFn,
+                self.new Mutator<ConfigEnum>() {
+                    @Override
+                    protected ConfigEnum getValue() {
+                        return TreeColorEnum.byId(value.get());
+                    }
+
+                    @Override
+                    protected void setValue(ConfigEnum v) {
+                        value.set(((TreeColorEnum) v).getId());
+                        Config.save();
+                    }
+                }, e -> true);
         addToGroups(list, w, root, sub);
     }
 

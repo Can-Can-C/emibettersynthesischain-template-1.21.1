@@ -134,6 +134,8 @@
 | `treeGoalSide` | right | 产物列在左还是右（`left`/`right`），默认右 |
 | `treeBackgroundTransparent` | true | 合成树背景是否透明（默认透明；关闭恢复深色） |
 | `treeNumberScale` | 0.5 | 图标上数字（数量/拥有量/流体用量）缩放倍数（0.25-1.0） |
+| `treeLineColor` | teal | 线条亮色预设（连接线/树括号/层级序号/S 标记）：青绿/蓝/紫/白/金/红/绿/灰 |
+| `treeDividerColor` | teal | 分割线配色预设（目标/材料分割线、副产物横线，取所选预设深色阶），预设同上 |
 
 快捷键键位：`V`（普通合成一次）、`Shift+V`（普通连续）、`Ctrl+V`（强制合成一次），可在按键设置里改绑。
 
@@ -159,3 +161,5 @@
 | 2026-08-15 | **v2.1.0 用户 runClient 验收通过**（5.7 + 6.15 全部验证点）；构建 BUILD SUCCESSFUL，产物 `emibettersynthesischain-2.1.0.jar` |
 | 2026-08-15 | **需求 11（新）**：AE2 终端内自动合成支持**网络拉料**——自建"槽位+网络"合并库存（`mergedInventory`）使树标红/预检识别网络；放料走 AE2 原生 `handler.craft`（transferRecipe，服务端从背包+网络取料）；树标红与链条统一**只用默认配方**（断了就停）；`hasCraftingMenuOpen` 认可 AE2 合成格（3×3）。**用户 runClient 验收通过（2026-08-15）** |
 | 2026-08-21 | **Phase 4（需求 12-14，v2.2.0）**：需求 12 树节点 tooltip 明细（需要/拥有/配方/可合成）；需求 13 单次合成数量可配置（**每树独立**，滚轮/± 调节、V 合 N 个、树按 N 倍展示、**批量调度**：lookahead 攒料 + 中间/目标连续合）；需求 14 树面板拖动调宽**已取消**（用户要求移除）。Productive Bees（可选）**蜜蜂配方显示**：树显示蜜蜂本体/繁殖输入（持久化为蜂笼标记，不自动合成）。**兼容性原则整改**（CLAUDE.md 新增）：去硬编码（蜂笼不伪造实体、删 id 前缀）、防溢出钳制提至 MAX/4、深度放宽。**批量策略定稿**：AE2 CRAFT_SHIFT 按需批量（一组阈值不超量、中间需求视野全开连续多组、背包材料也批量）、普通界面堆叠批量 + shift 快速合成。**修复**：放回同步冷却（AE2 光标不卡）、左键点击不被界面切换吞、每树独立数量。**GE2 背包读取修复**（playerSlots 不依赖 slotsBySemantic）。**用户 runClient 验收：2026-08-15（v2.1.0）+ 2026-08-15（v2.1.0）** |
+| 2026-08-21 | **UI 更新（会话 2）**：① 线条配色改为青绿色（预设可配置：`treeLineColor`/`treeDividerColor`，EMI 设置页下拉，默认 teal；含蓝/紫/白/金/红/绿/灰）② 每棵树左侧加"["括号（1px 竖线 + 顶/底各突出 2px + 横帽，括住一棵配方含副产物）③ 总材料行左侧加 **S(sum)** 标记 ④ 材料行左侧自上而下加**层级序号 1、2、…**（普通数字不带圆圈） |
+| 2026-08-22 | **v2.2.0 正式发布**：批量（每树数量/AE2 按需批量/背包批量/普通界面 shift 快速）、Productive Bees 显示、兼容性原则整改 + UI 更新（青绿配色可配置、树括号、S(sum)、层级序号）全部验收通过；修复"点击 EMI 设置页崩溃"（`TreeColorEnum` 由 `mixin` 包移至 `client` 包——mixin 受管控包内普通类被包外引用抛 `IllegalClassLoadError`）、`settings` 页两个配色下拉正常。构建 BUILD SUCCESSFUL，产物 `emibettersynthesischain-2.2.0.jar`。**用户 runClient 验收（2026-08-15 v2.1.0 + 2026-08-22 v2.2.0）** |

@@ -90,6 +90,9 @@
   - **深度测试**：物品图标 `renderFakeItem` z=32 且开启深度测试，自绘数字/拥有量必须 `pose.translate(z=200)`（同 EMI `renderAmount` 做法）才能通过深度测试画在图标之上——否则数字被图标"叠住"只露出图标外部分。
 - **总材料行（leafTotal）换行铺满**：种类过多时按材料区右界（= 分割线 `dividerX`，材料不越过分割线以免遮挡目标）换行铺满；`contentHeight` 用 `leafRowCount` 计物理行数保持一致。
 - **紧凑间距**：`PAD=3`、`LEFT_COL=24`、`ROW_H=16`、`ITEM_GAP=4`、`TREE_GAP=8`、`BP_GAP=6`。
+- **左侧装饰通道（GUTTER=9）**：所有材料行（leafTotal / rows / directInputs / 副产物）图标统一右移 `GUTTER` px，左侧通道画 **S(sum) 标记**（总材料行）与**层级序号**（rows+directInputs 自上而下 1、2、…，普通数字不带圆圈，跳过空行；换行行只标首行）。`layout`/`contentHeight`/`drawDecor` 三处用同一 `matX = rowX + GUTTER` 保证换行数与命中一致。
+- **树侧括号**：每棵树（含副产物区）左侧画 1px 竖线（`bx = px+PAD-2`），顶部/底部各突出 `BRACKET_OVER=2` px 并带 3px 横帽，形成"["把一棵配方括起来。
+- **线条配色可配置（预设）**：`treeLineColor`（连接线/括号/序号/S 的亮色）+ `treeDividerColor`（分割线/副产物横线，取该预设深色阶），默认 `teal`（青绿）。预设数据在 `client/TreeColorPreset`（纯枚举，id + base/deep 色值，无 EMI 依赖）；设置页 `EnumWidget` 下拉经 `client/TreeColorEnum`（实现 EMI `ConfigEnum`，仅映射 id/显示名）——树渲染等业务代码不触碰 EMI 内部类（隔离原则）。**TreeColorEnum 不能放 `mixin` 包**：Mixin 将 mixin 包声明为受管控包，包内非 mixin 类被包外引用抛 `IllegalClassLoadError`（`EnumWidget` 的 `Mutator` 匿名类生成在 `dev.emi.emi.screen` 包下属包外引用，实测崩溃）——与 `ConfigResetButton` 同为设置页 UI 适配，放 `client` 包。
 - **悬停**：悬停树时**所有 `canCraft=false` 节点叠红**（不可合成），悬停节点可合成白框/不可合成红框；物品栏样式 tooltip（`getTooltipText()` + `GuiGraphics.renderTooltip`，scissor 外绘制）。
 - **滚动**：`TreeMode` 惯性（velocity 衰减）+ 可拖动滚动条 + 钳制到 `[0,maxScroll]`（用未滚动内容高度算）+ 添加新树自动滚到底。
 
@@ -124,6 +127,8 @@
 | `treeGoalSide` | enum | right | 产物列在左还是右（`left`/`right`，默认右，v2.1.0 Q1） |
 | `treeBackgroundTransparent` | bool | true | 合成树背景是否透明（默认透明；关闭恢复深色，v2.1.0 Q2） |
 | `treeNumberScale` | double | 0.5 | 图标上数字（数量/拥有量/流体用量）缩放倍数（0.25-1.0） |
+| `treeLineColor` | enum | teal | 线条亮色预设（连接线/树括号/序号/S）：`teal/blue/purple/white/gold/red/green/gray` |
+| `treeDividerColor` | enum | teal | 分割线配色预设（目标/材料分割线、副产物横线，取所选预设深色阶），预设同上 |
 | `autoCraftShowTicks` | int | 6 | 可见合成链每步显示时长（tick） |
 | `autoCraftGapTicks` | int | 2 | 可见合成链步间间隔（tick） |
 | `autoCraftFailureMessages` | bool | true | 无法合成时是否红字提示 |
@@ -132,7 +137,8 @@
 
 ### 6.1 EMI 设置页注入（ConfigScreenMixin）
 - **参考**：`emi-plus-plus-2` 的 `ConfigScreenMixin`（EMI 1.1.24 同版本实证）。
-- **原理**：EMI 设置页 `ConfigScreen.init()` 反射 `EmiConfig` 静态字段渲染条目，附属无法直接注册配置。做法是 Mixin `ConfigScreen`：`@ModifyArg` 拦截 `init` 里 `addWidget(ListWidget)`，往 `ListWidget` 追加 `GroupNameWidget`/`SubGroupNameWidget`（分组头）+ `IntWidget`/`BooleanWidget`（值控件，`ConfigScreen.Mutator` 读写本 mod `Config`），并把 `root.children`/`widget.parentGroups`/`sub.children` 互相连好（可折叠、可搜索）。`@Inject addJumpButtons` TAIL 加跳转按钮（`ConfigJumpButton` → `jump("ebs")`）。
+- **原理**：EMI 设置页 `ConfigScreen.init()` 反射 `EmiConfig` 静态字段渲染条目，附属无法直接注册配置。做法是 Mixin `ConfigScreen`：`@ModifyArg` 拦截 `init` 里 `addWidget(ListWidget)`，往 `ListWidget` 追加 `GroupNameWidget`/`SubGroupNameWidget`（分组头）+ `IntWidget`/`BooleanWidget`/`EnumWidget`（值控件，`ConfigScreen.Mutator` 读写本 mod `Config`），并把 `root.children`/`widget.parentGroups`/`sub.children` 互相连好（可折叠、可搜索）。`@Inject addJumpButtons` TAIL 加跳转按钮（`ConfigJumpButton` → `jump("ebs")`）。
+- **配色下拉（EnumWidget，javap 实证 1.1.24）**：`EnumWidget(Component, List, search, Mutator<ConfigEnum>, Predicate<ConfigEnum>)` 点按钮调 `EnumWidget.page(值, 过滤, 消费)` — 对当前值 `checkcast Enum` 后 `getClass().getEnumConstants()` 列出同类枚举常量（过滤后经 `((ConfigEnum)e).getText()` 显示）→ 因此值枚举必须是**实现 `dev.emi.emi.config.ConfigEnum` 的 `java.lang.Enum`**（`getName`/`getText`）。本 mod 用 `client/TreeColorEnum`（映射预设 id → 翻译键 `ebs.config.tree.color.<id>`），数据在 `client/TreeColorPreset`。
 - **落盘**：`Mutator.setValue` 里 `Config.X.set(v)` 后调 `Config.save()`（`ModConfigSpec.save()` 写回 `config/emibettersynthesischain-common.toml`）。
 - **重置按钮**：组尾 `ConfigResetButton`（`client/`，非 mixin 包；`ConfigEntryWidget` + `EmiPort.newButton`）→ `Config.resetAll()` 恢复全部默认并落盘。
 

@@ -87,7 +87,17 @@
 - [x] 8.4 **Productive Bees 蜜蜂配方显示**（可选）：`ProductiveBeesSupport` 蜂笼标记持久化；树显示原始蜜蜂 EmiStack（原版 EMI 渲染路径）；蜜蜂↔蜂笼等价计数；tooltip 补名字行；门禁短路。
 - [x] 8.5 **修复**：AE2 光标放回同步冷却（不卡鼠标）；左键点击不被界面切换吞（防盗误触只拦右键）；AE2 背包读取（playerSlots）；AE2 mergedInventory 刷屏日志清理。
 - [x] 8.6 **兼容性原则整改**：CLAUDE.md 新增原则；去硬编码（蜂笼不伪造 entity、删 id 前缀）；防溢出钳制 MAX/4；canObtain 深度 8；宽度拖动移除。
-- [ ] 8.7 **用户 runClient 验收**：批量（AE2 多组零超量/背包批量/普通界面 shift 快速）、每树数量、Productive Bees 显示、光标不卡。
+- [x] 8.7 **用户 runClient 验收**：批量（AE2 多组零超量/背包批量/普通界面 shift 快速）、每树数量、Productive Bees 显示、光标不卡。（✅ 已验收 2026-08-22，随 v2.2.0 发布）
+
+## Phase 9 — UI 更新（线条配色 / 树括号 / S / 层级序号，2026-08-21 会话 2）
+- [x] 9.1 **线条配色青绿 + 预设可配置**：`client/TreeColorPreset`（纯枚举：teal/blue/purple/white/gold/red/green/gray，base 亮色 + deep 深色阶）；`Config.treeLineColor`（连接线/括号/序号/S）+ `treeDividerColor`（分割线）；EMI 设置页 `EnumWidget` 下拉（`mixin/TreeColorEnum` 实现 EMI `ConfigEnum`，业务代码零 EMI 依赖）+ lang。`./gradlew build` SUCCESS。
+- [x] 9.2 **树左侧"["括号**：每棵树 1px 竖线（`bx=px+PAD-2`），顶/底各突出 2px + 3px 横帽，括住一棵配方（含副产物）。
+- [x] 9.3 **总材料行左侧 S(sum) 标记** + **层级序号 1、2、…**（rows+directInputs 自上而下，普通数字不带圆圈，跳过空行）；材料行统一右移 `GUTTER=9` 留出左侧通道（layout/contentHeight/drawDecor 三处一致）。
+- [ ] 9.4 **用户 runClient 验收**：默认青绿线条；设置页改配色落盘即生效（重启仍在）；每棵树括号完整括住；总材料行有 S；各层左侧序号自上而下 1、2、…；产物列左/右、背景透明/不透明、数字大小等既有设置不受影响。
+
+## 验收与发布（v2.2.0，2026-08-22）
+- **验收**：8.7（批量/每树数量/Productive Bees/光标）+ 9.4（青绿配色/设置页下拉落盘/括号/S/层级序号/既有设置回归）全部通过；本次 runClient 期间发现并修复"点击 EMI 设置页崩溃"（`TreeColorEnum` 移出 `mixin` 受管控包，见 devlog 2026-08-21 会话 2）。
+- **构建**：`./gradlew build` → BUILD SUCCESSFUL；产物 `build/libs/emibettersynthesischain-2.2.0.jar`（`gradle.properties` `mod_version=2.2.0`）。
 
 ## Phase 7 — v2.1.1 AE2 终端网络拉料（需求 11）
 - [x] 7.1 **实现**：`Ae2Support.mergedInventory`（自建"槽位+网络"合并库存，不依赖 AE2 的 exposeNetworkInventoryToEmi 配置，默认 false 时 handler.getInventory 不含网络）；`CraftInventory.currentScreenInventory/current` AE2 终端优先用合并库存；`ClientCraftChain.fillViaEmi` AE2 分支走 **AE2 原生 handler.craft（transferRecipe）**（服务端从背包+网络取料，替代 clientFill——其 getStacks 依赖 AE2 配置的 getInventory）；树标红 `producersOf` 与链条 `findProducerToCraft` 统一**只用默认配方**（BoM.getRecipe，断了就停）；`hasCraftingMenuOpen` 认可 AE2 合成格（3×3）。`./gradlew build` → BUILD SUCCESSFUL。

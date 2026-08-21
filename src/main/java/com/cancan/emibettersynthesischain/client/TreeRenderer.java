@@ -30,11 +30,27 @@ public final class TreeRenderer {
     private static final int ICON = 16;
     private static final int PAD = 3;
     private static final int LEFT_COL = 24;
-    private static final int LINE_COLOR = 0xFF888888;
-    private static final int DIVIDER_COLOR = 0xFF444444;
+    /** 材料行左侧 S(sum)/序号 通道宽度（px）：材料图标统一右移，S/序号画在通道右缘。 */
+    private static final int GUTTER = 9;
+    /** S/序号 文字缩放。 */
+    private static final float TAG_SCALE = 0.5f;
+    /** 树侧括号：竖线在树顶/树底外突出量（px）。 */
+    private static final int BRACKET_OVER = 2;
+    /** 树侧括号：顶部/底部横帽长度（px）。 */
+    private static final int BRACKET_CAP = 3;
     private static final int SB_W = 4;
     private static final int SB_MARGIN = 2;
     private static final int SB_LANE = SB_W + SB_MARGIN + 2;
+
+    /** 线条亮色（连接线 / 树括号 / 序号 / S），配色预设可配置（Config.TREE_LINE_COLOR）。 */
+    private static int lineColor() {
+        return TreeColorPreset.fromId(Config.TREE_LINE_COLOR.get()).base();
+    }
+
+    /** 线条深色（分割线 / 副产物横线），配色预设可配置（Config.TREE_DIVIDER_COLOR，取该预设深色阶）。 */
+    private static int dividerColor() {
+        return TreeColorPreset.fromId(Config.TREE_DIVIDER_COLOR.get()).deep();
+    }
 
     /** 间距从 Config 读取（EMI 设置页可调），带下限保护。 */
     private static int rowH() {
@@ -128,7 +144,7 @@ public final class TreeRenderer {
         // 拥有量检测共用一个库存快照（每 Placed 每帧重建快照是渲染热点，合成量大时卡顿）
         EmiPlayerInventory invSnap = CraftInventory.currentScreenInventory();
 
-        drawDividers(g, px, pw, placed);
+        drawDecor(g, px, pw, trees, placed);
         for (Placed p : placed) {
             if (p.y() > py + ph) {
                 continue;
@@ -153,7 +169,7 @@ public final class TreeRenderer {
             // 已解析标签：右侧画短连线到"所选物品"（其图标是独立 Placed）
             if (p.resolvedTo() != null && !p.resolvedTo().isEmpty()) {
                 int cy = p.y() + ICON / 2;
-                g.fill(p.x() + ICON, cy, p.x() + ICON + 3, cy + 1, LINE_COLOR);
+                g.fill(p.x() + ICON, cy, p.x() + ICON + 3, cy + 1, lineColor());
             }
             // 数量：自绘小字（缩放倍数可配置），**画在图标格内右下角**。
             // 物品用 formatItemAmount（支持 k/M/G/T 缩写），流体用 formatFluidAmount（mB / L 单位）。
@@ -328,6 +344,8 @@ public final class TreeRenderer {
             rowX = px + PAD + LEFT_COL + 4;
             matRight = contentRight;
         }
+        // 材料图标统一右移 GUTTER 给左侧 S/序号 留通道（与 layout/drawDecor 一致）
+        int matX = rowX + GUTTER;
         int y = py + PAD;
         int maxBottom = y;
         for (TreeData tree : trees) {
@@ -338,11 +356,11 @@ public final class TreeRenderer {
             // 物理行数 = leafTotal 换行数 + 每层 rows/directInputs 各自换行数（与 layout 一致）
             int rows = 0;
             if (tree.leafTotal() != null && !tree.leafTotal().isEmpty()) {
-                rows += rowItemLines(tree.leafTotal(), rowX, matRight);
+                rows += rowItemLines(tree.leafTotal(), matX, matRight);
             }
-            rows += rowItemLines(tree.directInputs(), rowX, matRight);
+            rows += rowItemLines(tree.directInputs(), matX, matRight);
             for (List<TreeData.TreeItem> r : tree.rows()) {
-                rows += rowItemLines(r, rowX, matRight);
+                rows += rowItemLines(r, matX, matRight);
             }
             int byproductY = top + rows * rowH() + bpGap();
             if (!tree.byproducts().isEmpty()) {
@@ -470,6 +488,8 @@ public final class TreeRenderer {
         }
         // 材料区右界 = 分割线（目标在右时材料不能越过分割线遮挡目标；目标在左时材料可用到面板右边）
         int matRight = right ? dividerX : contentRight;
+        // 材料图标统一右移 GUTTER 给左侧 S/序号 留通道（与 contentHeight/drawDecor 一致）
+        int matX = rowX + GUTTER;
         for (int ti = 0; ti < trees.size(); ti++) {
             TreeData tree = trees.get(ti);
             if (tree == null || tree.isEmpty()) {
@@ -482,17 +502,17 @@ public final class TreeRenderer {
             // 材料区从目标行（top）开始：leafTotal → 原分层 rows → directInputs，每行超宽自动换行铺满
             int curY = top;
             if (tree.leafTotal() != null && !tree.leafTotal().isEmpty()) {
-                curY = placeRowItems(out, ti, rowX, matRight, curY, tree.leafTotal());
+                curY = placeRowItems(out, ti, matX, matRight, curY, tree.leafTotal());
             }
             List<List<TreeData.TreeItem>> restRows = new ArrayList<>(tree.rows());
             restRows.add(tree.directInputs());
             for (List<TreeData.TreeItem> rowItems : restRows) {
-                curY = placeRowItems(out, ti, rowX, matRight, curY, rowItems);
+                curY = placeRowItems(out, ti, matX, matRight, curY, rowItems);
             }
 
             int byproductY = curY + bpGap();
             if (!tree.byproducts().isEmpty()) {
-                int bx = rowX;
+                int bx = matX;
                 for (EmiIngredient bp : tree.byproducts()) {
                     if (bx + ICON <= matRight) {
                         out.add(new Placed(ti, bx, byproductY, bp, Kind.BYPRODUCT, true, null, null));
@@ -507,10 +527,16 @@ public final class TreeRenderer {
         return out;
     }
 
-    /** 分割线：目标列与材料区之间的竖线，以及副产物区上方的横线。 */
-    private static void drawDividers(GuiGraphics g, int px, int pw, List<Placed> placed) {
+    /** 树装饰（在图标之下绘制）：每棵树左侧的"["括号、目标/材料分割线、副产物上横线、
+     *  总材料行左侧 S(sum) 标记、材料行左侧层级序号 1、2、…（自上而下，普通数字不带圆圈）。
+     *  线条颜色走配置预设（{@link #lineColor} / {@link #dividerColor}）。 */
+    private static void drawDecor(GuiGraphics g, int px, int pw, List<TreeData> trees, List<Placed> placed) {
         int contentRight = px + pw - SB_LANE;
-        int dividerX = goalOnRight() ? (contentRight - LEFT_COL) : (px + PAD + LEFT_COL);
+        boolean right = goalOnRight();
+        int dividerX = right ? (contentRight - LEFT_COL) : (px + PAD + LEFT_COL);
+        int rowX = right ? (px + PAD) : (px + PAD + LEFT_COL + 4);
+        int matX = rowX + GUTTER;
+        int matRight = right ? dividerX : contentRight;
         int i = 0;
         while (i < placed.size()) {
             int ti = placed.get(i).treeIndex();
@@ -528,12 +554,57 @@ public final class TreeRenderer {
                     byproductY = p.y() - 2;
                 }
             }
-            g.fill(dividerX, top, dividerX + 1, maxY, DIVIDER_COLOR);
+            // 左侧括号：1px 竖线，顶部/底部各突出 BRACKET_OVER px，并带顶/底横帽，
+            // 形成"["把一棵配方（含副产物）括起来
+            int bx = px + PAD - 2;
+            int bTop = top - BRACKET_OVER;
+            int bBot = maxY + BRACKET_OVER;
+            int line = lineColor();
+            g.fill(bx, bTop, bx + 1, bBot + 1, line);
+            g.fill(bx, bTop, bx + BRACKET_CAP, bTop + 1, line);
+            g.fill(bx, bBot, bx + BRACKET_CAP, bBot + 1, line);
+            // 分割线（目标列与材料区之间）+ 副产物区上方横线
+            g.fill(dividerX, top, dividerX + 1, maxY, dividerColor());
             if (byproductY >= 0) {
-                g.fill(px + PAD, byproductY, px + PAD + 240, byproductY + 1, DIVIDER_COLOR);
+                g.fill(matX, byproductY, Math.min(matX + 240, matRight), byproductY + 1, dividerColor());
+            }
+            // 总材料行左侧 S(sum) + 各层合成序号（自上而下 1、2、…；S/序号共用左侧通道）
+            TreeData tree = trees.get(ti);
+            int y = top;
+            if (tree != null) {
+                if (tree.leafTotal() != null && !tree.leafTotal().isEmpty()) {
+                    drawSideTag(g, matX, y, "S");
+                    y += rowItemLines(tree.leafTotal(), matX, matRight) * rowH();
+                }
+                int num = 1;
+                for (List<TreeData.TreeItem> row : tree.rows()) {
+                    int lines = rowItemLines(row, matX, matRight);
+                    if (lines > 0) {
+                        drawSideTag(g, matX, y, String.valueOf(num++));
+                        y += lines * rowH();
+                    }
+                }
+                int lines = rowItemLines(tree.directInputs(), matX, matRight);
+                if (lines > 0) {
+                    drawSideTag(g, matX, y, String.valueOf(num));
+                }
             }
             i = j;
         }
+    }
+
+    /** 在材料行最左图标左侧画 S/序号：右缘对齐图标左缘 -3px，垂直居中于 16px 行；颜色同线条亮色。 */
+    private static void drawSideTag(GuiGraphics g, int matX, int y, String label) {
+        Font font = Minecraft.getInstance().font;
+        var pose = g.pose();
+        pose.pushPose();
+        pose.translate(matX - 3, y, 200);
+        pose.scale(TAG_SCALE, TAG_SCALE, 1f);
+        // 右缘对齐（缩放坐标系里 x = -宽度）；垂直居中：(ICON/缩放 - 行高)/2
+        int sx = -font.width(label);
+        int sy = (int) ((ICON / TAG_SCALE - font.lineHeight) / 2f);
+        g.drawString(font, label, sx, sy, lineColor());
+        pose.popPose();
     }
 
     /** 物品数量大数字缩写（1000 进制多级）：<1000 原样；≥1k / ≥1M / ≥1G / ≥1T。一位小数去尾零。 */
