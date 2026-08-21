@@ -7,6 +7,7 @@ import java.util.Optional;
 import com.cancan.emibettersynthesischain.Config;
 
 import dev.emi.emi.api.recipe.EmiPlayerInventory;
+import dev.emi.emi.api.recipe.EmiRecipe;
 import dev.emi.emi.api.stack.EmiIngredient;
 import dev.emi.emi.api.stack.EmiStack;
 import dev.emi.emi.api.stack.FluidEmiStack;
@@ -16,6 +17,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.ItemStack;
 
 /**
  * 在侧边栏面板内绘制合成树（行布局）。
@@ -72,7 +74,7 @@ public final class TreeRenderer {
     private enum Kind { GOAL, MATERIAL, BYPRODUCT }
 
     private record Placed(int treeIndex, int x, int y, EmiIngredient content, Kind kind, boolean canCraft,
-            EmiIngredient resolvedTo) {
+            EmiIngredient resolvedTo, EmiRecipe producer) {
     }
 
     private TreeRenderer() {
@@ -210,12 +212,72 @@ public final class TreeRenderer {
             List<EmiStack> stacks = hovered.content().getEmiStacks();
             if (!stacks.isEmpty()) {
                 List<Component> lines = stacks.get(0).getTooltipText();
-                if (lines != null && !lines.isEmpty()) {
+                if (lines != null) {
+                    lines = new ArrayList<>(lines);
+                    // Productive Bees 蜜蜂：原版 EMI 用 getTooltip()（**总是先显示名字行** getName）；
+                    // getTooltipText() 在品种数据缺失（getData null）时跳过名字行 → 第一行直接是灰色 id
+                    // （"显示 id"根因）→ 补上名字行（用 getName 的翻译，不硬编码），与原版 EMI 显示一致。
+                    if (ProductiveBeesSupport.isBeeEmiStack(stacks.get(0))) {
+                        // 第一行若是 id 形式（ResourceLocation 必然含 ":"）→ 无名字行 → 补 `getName()` 名字行
+                        String first = lines.isEmpty() ? "" : lines.get(0).getString();
+                        if (lines.isEmpty() || first.contains(":")) {
+                            Component name = ProductiveBeesSupport.beeDisplayName(stacks.get(0));
+                            if (name != null) {
+                                lines.add(0, name);
+                            }
+                        }
+                    }
+                    // tooltip 明细：需要量 / 拥有量（不足红字）/ 产出配方 / 可合成性
+                    appendDetailLines(lines, hovered, invSnap);
                     Font font = Minecraft.getInstance().font;
                     g.renderTooltip(font, lines, Optional.empty(), mouseX, mouseY);
                 }
             }
         }
+    }
+
+    /** tooltip 明细（追加在 EMI 原版 tooltip 下方）：需要量、拥有量（不足红字）、产出配方、可合成性。 */
+    private static void appendDetailLines(List<Component> lines, Placed p, EmiPlayerInventory invSnap) {
+        try {
+            long need = p.content().getAmount();
+            boolean fluid = p.content() instanceof FluidEmiStack;
+            if (need > 0) {
+                lines.add(Component.literal("需要: " + (fluid ? formatFluidAmount(need) : formatItemAmount(need))));
+            }
+            if (!fluid && p.kind() != Kind.GOAL) {
+                long owned = CraftInventory.count(invSnap, p.content());
+                lines.add(owned < need
+                        ? Component.literal("拥有: " + formatItemAmount(owned) + "（不足）")
+                                .withStyle(s -> s.withColor(0xFFFF5555))
+                        : Component.literal("拥有: " + formatItemAmount(owned)));
+            }
+            if (p.producer() != null) {
+                lines.add(Component.literal("由 " + producerOutputName(p.producer()) + " 合成"));
+            } else if (p.kind() != Kind.GOAL) {
+                lines.add(Component.literal("库存直接获取"));
+            }
+            if (p.kind() != Kind.BYPRODUCT) {
+                lines.add(p.canCraft()
+                        ? Component.literal("可合成").withStyle(s -> s.withColor(0xFF55FF55))
+                        : Component.literal("材料不足，无法合成").withStyle(s -> s.withColor(0xFFFF5555)));
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
+    /** 配方输出物名称（tooltip "由 X 合成"）。 */
+    private static String producerOutputName(EmiRecipe recipe) {
+        try {
+            List<EmiStack> outs = recipe.getOutputs();
+            if (outs != null && !outs.isEmpty()) {
+                ItemStack s = outs.get(0).getItemStack();
+                if (s != null && !s.isEmpty()) {
+                    return s.getHoverName().getString();
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return "配方";
     }
 
     /** 所有树的未滚动总内容高度（不含顶部 PAD）。与 {@link #layout} 的物理行数一致。
@@ -344,13 +406,14 @@ public final class TreeRenderer {
                 curY += rowH();
             }
             if (x + ICON <= matRight) {
-                out.add(new Placed(ti, x, curY, item.content(), Kind.MATERIAL, item.canCraft(), item.resolvedTo()));
+                out.add(new Placed(ti, x, curY, item.content(), Kind.MATERIAL, item.canCraft(), item.resolvedTo(),
+                        item.producer()));
                 lineStart = false;
             }
             x += step;
             if (item.hasResolved()) {
                 if (x + ICON <= matRight) {
-                    out.add(new Placed(ti, x, curY, item.resolvedTo(), Kind.MATERIAL, true, null));
+                    out.add(new Placed(ti, x, curY, item.resolvedTo(), Kind.MATERIAL, true, null, null));
                 }
                 x += step;
             }
@@ -414,7 +477,7 @@ public final class TreeRenderer {
             }
             int top = y;
             out.add(new Placed(ti, goalX, top, tree.goal().content(), Kind.GOAL, tree.goal().canCraft(),
-                    tree.goal().resolvedTo()));
+                    tree.goal().resolvedTo(), tree.goal().producer()));
 
             // 材料区从目标行（top）开始：leafTotal → 原分层 rows → directInputs，每行超宽自动换行铺满
             int curY = top;
@@ -432,7 +495,7 @@ public final class TreeRenderer {
                 int bx = rowX;
                 for (EmiIngredient bp : tree.byproducts()) {
                     if (bx + ICON <= matRight) {
-                        out.add(new Placed(ti, bx, byproductY, bp, Kind.BYPRODUCT, true, null));
+                        out.add(new Placed(ti, bx, byproductY, bp, Kind.BYPRODUCT, true, null, null));
                     }
                     bx += ICON + itemGap();
                 }

@@ -2,6 +2,8 @@ package com.cancan.emibettersynthesischain.client;
 
 import java.util.List;
 
+import org.lwjgl.glfw.GLFW;
+
 import com.cancan.emibettersynthesischain.Config;
 import com.cancan.emibettersynthesischain.EMIBettersynthesischain;
 import com.cancan.emibettersynthesischain.client.IEmiInternal;
@@ -38,21 +40,60 @@ public final class AutoCraftClient {
             "key.emibettersynthesischain.auto_craft", org.lwjgl.glfw.GLFW.GLFW_KEY_V,
             "category.emibettersynthesischain");
 
+    /** 单次合成数量改为**每树独立**（存 TreeManager 每条目，会话内默认 1）。 */
+    private static final int AMOUNT_MAX = 999;
+
+    /** 最近一次树悬停命中的树 index（-1 = 未命中；V 键与 ± 键用它取该树数量）。 */
+    private static int hoveredTreeIndex = -1;
+
+    /** 调节**指定树**的单次合成数量：dir=±1；Ctrl=翻倍/减半，Shift=±10，否则 ±1。钳制 1-999。 */
+    public static void adjustAmount(int treeIndex, int dir, int mods) {
+        int old = TreeManager.INSTANCE.getAmount(treeIndex);
+        int next;
+        if ((mods & GLFW.GLFW_MOD_CONTROL) != 0) {
+            next = dir > 0 ? Math.min(AMOUNT_MAX, old * 2) : Math.max(1, (old + 1) / 2);
+        } else if ((mods & GLFW.GLFW_MOD_SHIFT) != 0) {
+            next = clampAmount(old + dir * 10);
+        } else {
+            next = clampAmount(old + dir);
+        }
+        TreeManager.INSTANCE.setAmount(treeIndex, next);
+        if (next != old) {
+            MessageOverlay.show(Component.literal("单次合成数量: " + next), true);
+        }
+    }
+
+    private static int clampAmount(int v) {
+        return Math.max(1, Math.min(AMOUNT_MAX, v));
+    }
+
     private AutoCraftClient() {
     }
 
     /** 仿 EMI：事件驱动，比较原始 keyCode（不用 KeyMapping.consumeClick，其在屏幕内不可靠）。
-     *  V=合成一次（得最终结果即停）；Shift+V=连续合成（一直合到材料用完）；Ctrl+V=强制合成（尽力而为）。 */
+     *  V=按当前数量合成（得 N 个最终结果即停）；Shift+V=连续合成（一直合到材料用完）；
+     *  Ctrl+V=强制合成（尽力而为）；树模式下 +/-（Shift ±10 / Ctrl 翻倍减半）调节单次合成数量。 */
     public static void onKeyInput(InputEvent.Key event) {
-        if (event.getAction() != org.lwjgl.glfw.GLFW.GLFW_PRESS) {
+        if (event.getAction() != GLFW.GLFW_PRESS) {
             return;
         }
-        if (event.getKey() != KEY.getKey().getValue()) {
+        int key = event.getKey();
+        Minecraft mc = Minecraft.getInstance();
+        // 树模式下 +/- 调节**悬停树**的单次合成数量（搜索框输入时不触发）
+        boolean plusMinus = key == GLFW.GLFW_KEY_EQUAL || key == GLFW.GLFW_KEY_MINUS
+                || key == GLFW.GLFW_KEY_KP_ADD || key == GLFW.GLFW_KEY_KP_SUBTRACT;
+        if (TreeMode.isActive() && plusMinus && hoveredTreeIndex >= 0
+                && (mc.screen == null || !(mc.screen.getFocused() instanceof EditBox))) {
+            boolean up = key == GLFW.GLFW_KEY_EQUAL || key == GLFW.GLFW_KEY_KP_ADD;
+            adjustAmount(hoveredTreeIndex, up ? 1 : -1, event.getModifiers());
+            return;
+        }
+        if (key != KEY.getKey().getValue()) {
             return;
         }
         int mods = event.getModifiers();
-        boolean repeat = mods == org.lwjgl.glfw.GLFW.GLFW_MOD_SHIFT;
-        boolean force = mods == org.lwjgl.glfw.GLFW.GLFW_MOD_CONTROL;
+        boolean repeat = mods == GLFW.GLFW_MOD_SHIFT;
+        boolean force = mods == GLFW.GLFW_MOD_CONTROL;
         boolean plain = mods == 0;
         if (!plain && !repeat && !force) {
             return; // 只响应 V / Shift+V / Ctrl+V，排除其它修饰组合
@@ -84,7 +125,9 @@ public final class AutoCraftClient {
             showFail("该界面不支持自动合成");
             return;
         }
-        ClientCraftChain.start(recipe, repeat, force);
+        // V 定量：传当前悬停树的"单次合成数量"（Shift+V 连续 / Ctrl+V 强制在链条内自动忽略数量限制）
+        long target = hoveredTreeIndex >= 0 ? TreeManager.INSTANCE.getAmount(hoveredTreeIndex) : 1;
+        ClientCraftChain.start(recipe, repeat, force, target);
     }
 
     /** 当前界面是否注册了支持该配方的 EMI handler（纯客户端可合成的前提）。 */
@@ -119,6 +162,7 @@ public final class AutoCraftClient {
             IEmiInternal helper = InternalHelperImpl.INSTANCE;
             Bounds bounds = helper.getFavoritesPanelBounds();
             if (bounds == null) {
+                hoveredTreeIndex = -1;
                 return ItemStack.EMPTY;
             }
             Minecraft mc = Minecraft.getInstance();
@@ -128,8 +172,10 @@ public final class AutoCraftClient {
             TreeRenderer.Hit hit = TreeRenderer.hitTest(bounds.x(), bounds.y(), bounds.width(), bounds.height(),
                     helper.buildTrees(), mx, my);
             if (hit == null || hit.content() == null || hit.content().isEmpty()) {
+                hoveredTreeIndex = -1;
                 return ItemStack.EMPTY;
             }
+            hoveredTreeIndex = hit.treeIndex();
             // V 键只对合成树中的**最终产物**（goal）有效——中间材料/副产物不可自动合成
             if (!hit.isGoal()) {
                 return ItemStack.EMPTY;

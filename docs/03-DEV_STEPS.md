@@ -67,8 +67,31 @@
 ## 验收与发布
 - **v2.1.0**（2026-08-15）：用户 runClient 验收全部通过（5.7 + 6.15）。构建：`./gradlew build` → BUILD SUCCESSFUL；产物 `build/libs/emibettersynthesischain-2.1.0.jar`。
 
-## Phase 4（后续迭代，未列入 1.0.0）
-- 树节点 tooltip 明细；单次合成数量可配置；树面板拖动调宽。
+## Phase 4 — v2.2.0 三项增强（需求 12-14，2026-08-15）
+- [x] 4.1 **树节点 tooltip 明细（需求 12）**：`TreeData.TreeItem` 增加 producer（产出配方）；tooltip 追加"需要 X / 拥有 Y（不足红字）/ 由 X 合成 / 可合成性"。`./gradlew build` SUCCESS。
+- [x] 4.2 **单次合成数量可配置（需求 13，会话内）**：`AutoCraftClient.amount`（默认 1，1-999，重启回 1）；树模式悬停最终产物**滚轮**调节 + **键盘 +/-** 调节（Shift ±10、Ctrl 翻倍/减半，提示"N"）；V=合 N 个即停（`ClientCraftChain.start` 加 targetAmount）+ **树按 N 倍展示** + **批量调度**（lookahead 攒料 + lastProducer 连续合成）；Shift+V/Ctrl+V 不变。`./gradlew build` SUCCESS。
+- [x] ~~4.3 树面板拖动调宽（需求 14）~~：**已取消（2026-08-16 用户要求移除该功能）**，代码与设计已删除；宽度仍由 `treeSidebarWidth` 配置 + EMI 设置页调整。
+
+## 兼容性原则整改（2026-08-16，用户要求"极强兼容性，不硬编码"）
+- [x] C1 **去硬编码**：`ProductiveBeesSupport` 删硬编码实体 id / 伪造蜂笼 NBT（只写品种 type 作内部标记）；`TreeRenderer` 删 `"productivebees"` 前缀判断（用通用 `contains(":")`）。
+- [x] C2 **不削真实量**：`Ae2Support.MAX_REASONABLE_STORED` 由 1e10 提到 `MAX_VALUE/4`（仅防溢出）。
+- [x] C3 **深度放宽**：`canObtain` 深度 6→8（减少深度链误标红）。
+- [x] C4 **宽度拖动移除**（TreeMode/EMI everything）；已知限制记录 docs/02 §11.4。
+- [x] C5 **诊断日志清理**：mergedInventory 刷屏日志删除；getAddTarget/tree-btn/step 诊断保留为调试（会话收尾统一降级）。
+- [ ] 4.4 **用户 runClient 验收**：tooltip 明细各字段；滚轮/± 调数量 + 树 N 倍 + V 合 N 个；批量调度（先攒中间再连合目标）；Shift/Ctrl 键行为不变。
+
+## Phase 8 — v2.2.0 批量/Productive Bees/兼容性（2026-08-21）
+- [x] 8.1 **每树独立合成数量**：`TreeManager` 每条目金额（落盘兼容旧档）；滚轮/± 只调悬停树；V 按树数量；树按各自 N 倍显示。
+- [x] 8.2 **批量策略定稿（AE2）**：CRAFT_SHIFT 按需批量（需求 ≥ 一组才批量、余数单批精确不超量）；中间步需求视野=目标剩余全部批次（连续多组）；背包材料也批量（clientFill 堆叠放料优先 + handler.craft 回退）。
+- [x] 8.3 **普通界面批量放料**：`getStacks(recipe, batch)` + `clientFill` 放 B 份堆叠进合成格 → shift 快速合成（服务端连续合成 B 批）。
+- [x] 8.4 **Productive Bees 蜜蜂配方显示**（可选）：`ProductiveBeesSupport` 蜂笼标记持久化；树显示原始蜜蜂 EmiStack（原版 EMI 渲染路径）；蜜蜂↔蜂笼等价计数；tooltip 补名字行；门禁短路。
+- [x] 8.5 **修复**：AE2 光标放回同步冷却（不卡鼠标）；左键点击不被界面切换吞（防盗误触只拦右键）；AE2 背包读取（playerSlots）；AE2 mergedInventory 刷屏日志清理。
+- [x] 8.6 **兼容性原则整改**：CLAUDE.md 新增原则；去硬编码（蜂笼不伪造 entity、删 id 前缀）；防溢出钳制 MAX/4；canObtain 深度 8；宽度拖动移除。
+- [ ] 8.7 **用户 runClient 验收**：批量（AE2 多组零超量/背包批量/普通界面 shift 快速）、每树数量、Productive Bees 显示、光标不卡。
+
+## Phase 7 — v2.1.1 AE2 终端网络拉料（需求 11）
+- [x] 7.1 **实现**：`Ae2Support.mergedInventory`（自建"槽位+网络"合并库存，不依赖 AE2 的 exposeNetworkInventoryToEmi 配置，默认 false 时 handler.getInventory 不含网络）；`CraftInventory.currentScreenInventory/current` AE2 终端优先用合并库存；`ClientCraftChain.fillViaEmi` AE2 分支走 **AE2 原生 handler.craft（transferRecipe）**（服务端从背包+网络取料，替代 clientFill——其 getStacks 依赖 AE2 配置的 getInventory）；树标红 `producersOf` 与链条 `findProducerToCraft` 统一**只用默认配方**（BoM.getRecipe，断了就停）；`hasCraftingMenuOpen` 认可 AE2 合成格（3×3）。`./gradlew build` → BUILD SUCCESSFUL。
+- [x] 7.2 **用户 runClient 验收通过**：AE2 终端、背包无料仅网络有料 → V 自动合成成功（材料直接网络进合成格→合成→取产物）；树按默认配方识别（默认链断即红）；中间层按默认配方链合成；Shift+V 连续；AE2 未装环境不受影响。**（✅ 已验收 2026-08-15）**
 
 ## 通用流程（每次会话）
 1. 读 `devlog/` 当日日志 + 本文件定位阶段。

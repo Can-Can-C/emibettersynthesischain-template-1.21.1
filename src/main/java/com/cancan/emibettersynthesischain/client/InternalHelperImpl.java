@@ -55,8 +55,6 @@ public class InternalHelperImpl implements IEmiInternal {
     private int invCheckCounter = 0;
     /** 树重建时构建一次的库存快照：hasEnough/canObtain 全部复用，避免每次计数重建快照（性能热点）。 */
     private EmiPlayerInventory invSnapshot;
-    /** 产出配方候选缓存：EMI 配方集合会话内静态，按材料键缓存（canObtain 递归热点）。 */
-    private final Map<String, List<ProducerEntry>> producerCache = new HashMap<>();
 
     private InternalHelperImpl() {
     }
@@ -94,9 +92,54 @@ public class InternalHelperImpl implements IEmiInternal {
                 if (!stack.isEmpty()) {
                     return stack;
                 }
+                // Productive Bees 蜜蜂：goal.ingredient 是虚拟 BeeEmiStack（getItemStack 空）→ 蜂笼物品
+                ItemStack cage = cageFromIngredient(BoM.tree.goal.ingredient);
+                if (cage != null && !cage.isEmpty()) {
+                    return cage;
+                }
             }
+            EMIBettersynthesischain.LOGGER.info("EBS getAddTarget: RecipeScreen but BoM goal missing (tree={} goal={})",
+                    BoM.tree == null ? "null" : "set", BoM.tree != null && BoM.tree.goal == null ? "null" : "set");
         }
-        return getHoveredItemStack();
+        ItemStack hovered = getHoveredItemStack();
+        if (hovered.isEmpty()) {
+            hovered = cageFromHovered(); // 悬停是蜜蜂（虚拟）→ 蜂笼物品
+        }
+        if (hovered.isEmpty()) {
+            EMIBettersynthesischain.LOGGER.info("EBS getAddTarget: hovered fallback EMPTY (screen={})",
+                    Minecraft.getInstance().screen == null ? "null" : Minecraft.getInstance().screen.getClass().getName());
+        }
+        return hovered;
+    }
+
+    /** Productive Bees 蜜蜂 EmiIngredient → 蜂笼物品；非蜜蜂 → null。 */
+    private ItemStack cageFromIngredient(EmiIngredient ing) {
+        try {
+            List<EmiStack> stacks = ing.getEmiStacks();
+            if (!stacks.isEmpty()) {
+                return ProductiveBeesSupport.toBeeCageStack(stacks.get(0));
+            }
+        } catch (Exception ignored) {
+        }
+        return null;
+    }
+
+    /** 悬停物品若是 Productive Bees 蜜蜂（虚拟 BeeEmiStack）→ 蜂笼物品；否则 EMPTY。 */
+    private ItemStack cageFromHovered() {
+        try {
+            EmiStackInteraction interaction = EmiApi.getHoveredStack(true);
+            if (interaction != null && !interaction.isEmpty()) {
+                List<EmiStack> stacks = interaction.getStack().getEmiStacks();
+                if (!stacks.isEmpty()) {
+                    ItemStack cage = ProductiveBeesSupport.toBeeCageStack(stacks.get(0));
+                    if (cage != null) {
+                        return cage;
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return ItemStack.EMPTY;
     }
 
     @Override
@@ -169,10 +212,14 @@ public class InternalHelperImpl implements IEmiInternal {
             // 树重建时刷新一次库存快照：hasEnough/canObtain 全部用同一快照，
             // 避免每个节点每次计数都重建 EmiPlayerInventory（合成量大时是主要卡顿源）。
             invSnapshot = CraftInventory.currentScreenInventory();
+            // 每树独立"单次合成数量"（各自调数量互不影响；数量变化后 setAmount 已 markDirty 重建）
             List<TreeData> trees = new ArrayList<>();
             for (int i = 0; i < TreeManager.INSTANCE.size(); i++) {
                 ItemStack item = TreeManager.INSTANCE.getItem(i);
-                TreeData tree = buildTree(EmiStack.of(item), TreeManager.INSTANCE.getRecipeId(i));
+                // 树显示：普通物品原样；Productive Bees 蜜蜂（持久化为蜂笼）→ buildTree 内用
+                // 配方输出的原始蜜蜂 EmiStack 显示（原版 EMI 同路径，渲染蜜蜂本体）
+                TreeData tree = buildTree(EmiStack.of(item), TreeManager.INSTANCE.getRecipeId(i),
+                        TreeManager.INSTANCE.getAmount(i));
                 if (tree != null && !tree.isEmpty()) {
                     trees.add(tree);
                 }
@@ -235,16 +282,30 @@ public class InternalHelperImpl implements IEmiInternal {
      * 构建一棵树的布局数据：worklist 成本聚合（复刻 EMI BoM 行为）。
      *
      * <p>对每个材料：need = 总需要量；batch = ceil(need / 单次产出)；produced = batch×单次产出；
-     * excess = produced - need（&gt;0 即副产物）。目标节点 amount = 配方单次输出量。</p>
+     * excess = produced - need（&gt;0 即副产物）。目标节点 amount = 配方单次输出量 × 目标份数
+     * （需求 13：单次合成数量 N，树按 N 倍展示材料与最终产物）。</p>
      */
-    private TreeData buildTree(EmiIngredient goalIng, ResourceLocation goalRecipeId) {
+    private TreeData buildTree(EmiIngredient goalIng, ResourceLocation goalRecipeId, long targetAmount) {
         if (goalIng == null || goalIng.isEmpty()) {
             return null;
         }
+        long target = Math.max(1, targetAmount);
         Map<String, Agg> aggs = new HashMap<>();
         ArrayDeque<String> queue = new ArrayDeque<>();
-        // 目标（最终结果）：用"加入时查看的配方"，不需要默认配方
-        addGoal(aggs, queue, goalIng, resolveGoalRecipe(goalIng, goalRecipeId));
+        // 目标配方（"加入时查看的配方"，不需要默认配方）
+        EmiRecipe goalRecipe = resolveGoalRecipe(goalIng, goalRecipeId);
+        // 显示目标：Productive Bees 配方输出是蜜蜂（原版 BeeEmiStack，实体/品种数据正确，渲染蜜蜂本体）
+        // → 直接用配方输出显示（与原版 EMI 相同路径），避免自造 BeeEmiStack（渲染空白/key 错乱）；
+        // 非蜜蜂配方 → 原样 goalIng。
+        EmiIngredient goalDisplay = goalIng;
+        if (goalRecipe != null) {
+            List<EmiStack> outs = goalRecipe.getOutputs();
+            if (outs != null && !outs.isEmpty() && ProductiveBeesSupport.isBeeEmiStack(outs.get(0))) {
+                goalDisplay = outs.get(0);
+            }
+        }
+        // 目标（最终结果）：need = 目标份数（N 倍展开材料）
+        addGoal(aggs, queue, goalDisplay, goalRecipe, target);
         int guard = 0;
         while (!queue.isEmpty()) {
             // 兜底：防止配方环（如药水 NBT 同 id）导致 worklist 无限增长
@@ -285,7 +346,8 @@ public class InternalHelperImpl implements IEmiInternal {
         if (goalOutput <= 0) {
             goalOutput = Math.max(1, goalAgg.need);
         }
-        EmiIngredient goalDisp = goalAgg.content.copy().setAmount(goalOutput);
+        // 目标显示：单批输出量 × 目标份数（N 个最终产物）
+        EmiIngredient goalDisp = goalAgg.content.copy().setAmount(Math.max(1, target));
 
         // 直接输入行（目标配方输入，同材料聚合，amount = 配方消耗量 × 目标批次）
         List<EmiIngredient> directInputs = new ArrayList<>();
@@ -344,14 +406,16 @@ public class InternalHelperImpl implements IEmiInternal {
         }
 
         // 封装为 TreeItem（标红：能否获得该节点——自身够或可由工作台链式合成，含标签成员/3×3 需工作台）
+        // 目标节点按 N 份判断能否获得（goalAgg.need = 目标份数）
         TreeData.TreeItem goalItem = new TreeData.TreeItem(goalDisp,
-                canObtain(goalDisp, goalOutput, goalAgg.recipe, 0, new HashSet<>()), resolvedToFor(goalAgg));
+                canObtain(goalDisp, goalAgg.need, goalAgg.recipe, 0, new HashSet<>()), resolvedToFor(goalAgg),
+                goalAgg.recipe);
         List<TreeData.TreeItem> directItems = new ArrayList<>();
         for (EmiIngredient input : directInputs) {
             Agg agg = aggs.get(key(input));
             directItems.add(new TreeData.TreeItem(input,
                     canObtain(input, input.getAmount(), agg == null ? null : agg.recipe, 0, new HashSet<>()),
-                    resolvedToFor(agg)));
+                    resolvedToFor(agg), agg == null ? null : agg.recipe));
         }
         List<List<TreeData.TreeItem>> rowItems = new ArrayList<>();
         for (List<EmiIngredient> row : rows) {
@@ -360,7 +424,7 @@ public class InternalHelperImpl implements IEmiInternal {
                 Agg agg = aggs.get(key(ing));
                 items.add(new TreeData.TreeItem(ing,
                         canObtain(ing, ing.getAmount(), agg == null ? null : agg.recipe, 0, new HashSet<>()),
-                        resolvedToFor(agg)));
+                        resolvedToFor(agg), agg == null ? null : agg.recipe));
             }
             rowItems.add(items);
         }
@@ -375,7 +439,7 @@ public class InternalHelperImpl implements IEmiInternal {
             }
             leafTotal.add(new TreeData.TreeItem(agg.content.copy().setAmount(Math.max(1, agg.need)),
                     true, // 叶节点 = 库存已足可提供
-                    resolvedToFor(agg)));
+                    resolvedToFor(agg), null)); // 叶节点无产出配方
         }
         // 保持视觉稳定：已解析标签在前，再按内容键排序（避免 HashMap 乱序）
         leafTotal.sort((a, b) -> {
@@ -402,7 +466,14 @@ public class InternalHelperImpl implements IEmiInternal {
             }
             ItemStack item = stacks.get(0).getItemStack();
             if (item == null || item.isEmpty()) {
-                return true;
+                // Productive Bees 蜜蜂（虚拟 BeeEmiStack，getItemStack 空）：**可计数**（蜂笼等价）——
+                // 不能走"空视为足够"分支，否则恒判库存够 → 永不拆解（"无法拆分"根因）
+                if (ProductiveBeesSupport.isBeeEmiStack(stacks.get(0))) {
+                    long owned = invSnapshot != null ? CraftInventory.count(invSnapshot, content)
+                            : CraftInventory.count(content);
+                    return owned >= amount;
+                }
+                return true; // 流体/空物品：不可计数，视为足够
             }
             if (invSnapshot != null) {
                 // 树构建期间：复用本次重建的统一快照（避免每个节点每次重建）
@@ -437,10 +508,14 @@ public class InternalHelperImpl implements IEmiInternal {
      * 玩家当前能否**获得**该材料（链条可达，客户端干跑）：自身数量足够 → true；否则**任一**产出它的
      * **工作台配方**（首选 BoM 默认，含标签成员；中间 3×3 需打开工作台界面）的子材料链式可得 → true。
      * **EMI 祖先配方栈防环**：递归路径上配方重复即剪枝。**非工作台步骤不可合成**。
+     * 深度上限（{@value #CAN_OBTAIN_MAX_DEPTH}）仅为**防递归指数爆炸**的性能约束（配方分支因子大），
+     * 正常工作台配方链远浅于此；更深链按"不可获得"标红（保守）。
      */
+    private static final int CAN_OBTAIN_MAX_DEPTH = 8;
+
     private boolean canObtain(EmiIngredient content, long amount, EmiRecipe preferred, int depth,
             Set<EmiRecipe> ancestors) {
-        if (depth > 6) {
+        if (depth > CAN_OBTAIN_MAX_DEPTH) {
             return false;
         }
         if (hasEnough(content, amount)) {
@@ -478,48 +553,21 @@ public class InternalHelperImpl implements IEmiInternal {
     private record ProducerEntry(EmiRecipe recipe, long perBatch, boolean is2x2) {
     }
 
-    /** 产出该材料的**工作台**配方候选：首选 preferred（BoM 默认）前置，其余取缓存（EMI 配方集合会话内静态）。
-     *  防环由祖先栈承担。preferred 不在缓存内（每次单独构建），其余配方按材料键缓存一次。 */
+    /**
+     * 产出该材料的**工作台**配方：**只用默认配方**——preferred（父配方视角，如目标最后一步配方 /
+     * 该材料已解析的默认配方）优先；否则查 {@link BoM#getRecipe}（玩家设为默认 / EMI 数据默认）。
+     * 不逐个尝试其它产出配方（"设默认，断了就断了"：默认链断 → 标红/链条停止，尊重玩家配方选择）。
+     */
     private List<ProducerEntry> producersOf(EmiIngredient content, EmiRecipe preferred) {
-        String k = key(content);
-        List<ProducerEntry> cached = producerCache.get(k);
-        if (cached == null) {
-            cached = buildProducers(content);
-            producerCache.put(k, cached);
-        }
+        List<ProducerEntry> out = new ArrayList<>();
         if (preferred != null && isWorkbenchRecipe(preferred)) {
-            List<ProducerEntry> out = new ArrayList<>();
             out.add(new ProducerEntry(preferred, outputAmount(preferred, content), is2x2Recipe(preferred)));
-            for (ProducerEntry e : cached) {
-                if (e.recipe() != preferred) {
-                    out.add(e);
-                }
-            }
             return out;
         }
-        return cached;
-    }
-
-    private List<ProducerEntry> buildProducers(EmiIngredient content) {
-        List<ProducerEntry> out = new ArrayList<>();
         try {
-            EmiRecipeManager m = EmiApi.getRecipeManager();
-            if (m == null) {
-                return out;
-            }
-            List<EmiStack> stacks = content.getEmiStacks();
-            if (stacks.isEmpty()) {
-                return out;
-            }
-            for (EmiRecipe r : m.getRecipesByOutput(stacks.get(0))) {
-                if (!isWorkbenchRecipe(r)) {
-                    continue;
-                }
-                long perBatch = outputAmount(r, content);
-                if (perBatch <= 0) {
-                    continue; // 该配方并不产出此材料（如标签候选中的其它配方）→ 对 canObtain 无意义
-                }
-                out.add(new ProducerEntry(r, perBatch, is2x2Recipe(r)));
+            EmiRecipe def = BoM.getRecipe(content);
+            if (def != null && isWorkbenchRecipe(def)) {
+                out.add(new ProducerEntry(def, outputAmount(def, content), is2x2Recipe(def)));
             }
         } catch (Exception ignored) {
         }
@@ -546,11 +594,16 @@ public class InternalHelperImpl implements IEmiInternal {
         return false;
     }
 
-    /** 客户端：3×3 合成需玩家**打开工作台界面**（containerMenu 为 CraftingMenu，与服务端一致）。 */
+    /** 客户端：3×3 合成可用（玩家**打开工作台界面**，或 **AE2 合成终端**——其合成格为 3×3，
+     *  与工作台等价；与服务端一致）。 */
     private boolean hasCraftingMenuOpen() {
         try {
             Player player = Minecraft.getInstance().player;
-            return player != null && player.containerMenu instanceof CraftingMenu;
+            if (player == null) {
+                return false;
+            }
+            return player.containerMenu instanceof CraftingMenu
+                    || Ae2Support.isCraftingTermMenu(player.containerMenu);
         } catch (Exception ignored) {
         }
         return false;
@@ -576,6 +629,7 @@ public class InternalHelperImpl implements IEmiInternal {
         if (content == null || content.isEmpty() || delta <= 0) {
             return;
         }
+        // 材料 content 保留蜜蜂 EmiStack（树显示蜜蜂本体；key 匹配由 key() 统一蜜蜂↔蜂笼）
         String key = key(content);
         Agg agg = aggs.get(key);
         if (agg == null) {
@@ -602,14 +656,15 @@ public class InternalHelperImpl implements IEmiInternal {
         queue.add(key);
     }
 
-    /** 目标节点：用显式配方创建（不经过 findRecipe，目标不需要默认配方）。 */
-    private void addGoal(Map<String, Agg> aggs, ArrayDeque<String> queue, EmiIngredient content, EmiRecipe recipe) {
+    /** 目标节点：用显式配方创建（不经过 findRecipe，目标不需要默认配方）。need = 目标份数 target（≥1）。 */
+    private void addGoal(Map<String, Agg> aggs, ArrayDeque<String> queue, EmiIngredient content, EmiRecipe recipe,
+            long target) {
         if (content == null || content.isEmpty()) {
             return;
         }
         String key = key(content);
         Agg agg = new Agg(content, recipe);
-        agg.need = 1;
+        agg.need = Math.max(1, target);
         agg.depth = 0;
         aggs.put(key, agg);
         queue.add(key);
@@ -663,10 +718,12 @@ public class InternalHelperImpl implements IEmiInternal {
 
     /** 产出某材料的配方：**只用玩家设为默认 / EMI 数据驱动默认的配方**（BoM.getRecipe 已处理取消默认；
      *  分解类默认由 EMI 默认数据本身避免，运行时用**祖先配方栈**（forbidden）剪环）；
-     *  **当前屏幕库存已有足够该材料（≥ needAmount 总需要量）时视为叶子（不拆解）**。
-     *  needAmount 用"该材料累计总需要量"而非单次 getAmount——否则背包有 1 个木板就不向下拆解。 */
+     *  **当前屏幕库存已有足够该材料（≥ needAmount 总需要量）时视为叶子（不拆解）**（含蜜蜂：
+     *  有蜂笼装的蜜蜂就不拆）。needAmount 用"该材料累计总需要量"而非单次 getAmount。
+     *  **Productive Bees 蜜蜂不做回退拆解**：产蜜蜂的配方除繁殖外还有蜂巢获取/转化等（输入巨大、
+     *  数量爆炸），且"由哪种蜜蜂繁殖"已由目标配方的直接输入行展示——蜜蜂材料无默认配方即成叶子。 */
     private EmiRecipe findRecipe(EmiIngredient content, long needAmount, Set<EmiRecipe> forbidden) {
-        // 库存 ≥ 总需要量 → 叶子（不需要再合成）
+        // 库存 ≥ 总需要量 → 叶子（不需要再合成；蜜蜂也如此——已有的就不拆分）
         if (needAmount > 0 && hasEnough(content, needAmount)) {
             return null;
         }
@@ -772,7 +829,8 @@ public class InternalHelperImpl implements IEmiInternal {
         return false;
     }
 
-    /** 材料去重键：标签用 tag:id；物品/流体用其资源 id + 组件哈希（区分不同 NBT 物品如药水）。 */
+    /** 材料去重键：标签用 tag:id；物品/流体用其资源 id + 组件哈希（区分不同 NBT 物品如药水）。
+     *  Productive Bees 蜜蜂（虚拟 BeeEmiStack 或蜂笼物品）统一用 {@code bee:<品种>}——不同品种分开。 */
     private String key(EmiIngredient content) {
         if (content == null) {
             return "";
@@ -786,10 +844,20 @@ public class InternalHelperImpl implements IEmiInternal {
             return "";
         }
         EmiStack first = stacks.get(0);
+        // Productive Bees 蜜蜂品种 EmiStack（getItemStack 空）
+        ResourceLocation beeType = ProductiveBeesSupport.beeTypeOf(first);
+        if (beeType != null) {
+            return "bee:" + beeType;
+        }
         ResourceLocation id = first.getId();
         String base = id == null ? "" : id.toString();
         ItemStack item = first.getItemStack();
         if (item != null && !item.isEmpty()) {
+            // 蜂笼物品（装 Productive Bees 蜜蜂）→ 与蜜蜂品种同 key
+            ResourceLocation cageBee = ProductiveBeesSupport.beeTypeOfStack(item);
+            if (cageBee != null) {
+                return "bee:" + cageBee;
+            }
             // 同 id 不同组件（不同药水/时长/附魔）分开，避免自环死循环。
             // 必须用 hashItemAndComponents（含组件），不能用 item.hashCode()（身份哈希，每次不同）
             return base + "#" + Integer.toHexString(ItemStack.hashItemAndComponents(item));

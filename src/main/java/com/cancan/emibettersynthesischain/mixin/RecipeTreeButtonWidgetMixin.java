@@ -36,6 +36,10 @@ public abstract class RecipeTreeButtonWidgetMixin {
             return;
         }
         ItemStack stack = output.getItemStack();
+        if (stack == null || stack.isEmpty()) {
+            // Productive Bees 蜜蜂等虚拟 EmiStack → 蜂笼物品（树按蜂笼持久化/判重）
+            stack = com.cancan.emibettersynthesischain.client.ProductiveBeesSupport.toBeeCageStack(output);
+        }
         if (stack == null || stack.isEmpty() || !TreeManager.INSTANCE.contains(stack)) {
             return; // 不在树中：走 EMI 原逻辑
         }
@@ -50,10 +54,18 @@ public abstract class RecipeTreeButtonWidgetMixin {
         EmiRecipe recipe = acc.ebs$recipe();
         EmiStack output = recipe.getOutputs().isEmpty() ? null : recipe.getOutputs().get(0);
         if (output == null) {
+            com.cancan.emibettersynthesischain.EMIBettersynthesischain.LOGGER.info(
+                    "EBS tree-btn: recipe {} has no outputs", recipe.getId());
             return;
         }
         ItemStack stack = output.getItemStack();
         if (stack == null || stack.isEmpty()) {
+            // Productive Bees 蜜蜂等虚拟 EmiStack（getItemStack 空）→ 蜂笼物品（蜜蜂品种 NBT）
+            stack = com.cancan.emibettersynthesischain.client.ProductiveBeesSupport.toBeeCageStack(output);
+        }
+        if (stack == null || stack.isEmpty()) {
+            com.cancan.emibettersynthesischain.EMIBettersynthesischain.LOGGER.info(
+                    "EBS tree-btn: output stack EMPTY for recipe {} (output emi={})", recipe.getId(), output);
             return;
         }
         if (TreeManager.INSTANCE.contains(stack)) {

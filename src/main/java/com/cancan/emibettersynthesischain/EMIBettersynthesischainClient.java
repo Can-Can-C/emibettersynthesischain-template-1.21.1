@@ -105,12 +105,17 @@ public class EMIBettersynthesischainClient {
         if (event.getAction() != GLFW.GLFW_PRESS) {
             return;
         }
-        // 界面切换中（本次或上次点击刚打开/关闭了界面）：EMI 侧边栏 bounds 可能仍是过期值，
-        // 直接跳过树交互，防误删/误开配方。
-        if (screenTransition || Minecraft.getInstance().screen != lastScreen) {
+        // 界面切换后的第一次 PRESS：EMI 侧边栏 bounds 可能仍是过期值。
+        // **左键放行**（点击开配方界面无害，直接响应——避免"打开背包要点两次"）；
+        // **右键保留拦截**（删树高代价，防"右键方块打开容器瞬间 bounds 残留误删树"）。
+        if (event.getButton() == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
+            screenTransition = false; // 左键=主动交互，界面已就绪，清除切换标志
+            lastScreen = Minecraft.getInstance().screen;
+        } else if (event.getButton() == GLFW.GLFW_MOUSE_BUTTON_RIGHT
+                && (screenTransition || Minecraft.getInstance().screen != lastScreen)) {
             screenTransition = false;
             lastScreen = Minecraft.getInstance().screen;
-            return;
+            return; // 右键在界面切换期 → 跳过（防误删树）
         }
         // 鼠标不在收藏面板内（如右键点方块打开界面、左键点世界）→ 不处理树交互，避免误删树/误开配方
         if (!bounds.contains(mx, my)) {
@@ -129,8 +134,11 @@ public class EMIBettersynthesischainClient {
             TreeRenderer.Hit hit = TreeRenderer.hitTest(bounds.x(), bounds.y(), bounds.width(), bounds.height(),
                     helper.buildTrees(), mx, my);
             if (hit == null || hit.content() == null || hit.content().isEmpty()) {
+                EMIBettersynthesischain.LOGGER.info("EBS click: no hit or empty content at ({},{})", mx, my);
                 return;
             }
+            EMIBettersynthesischain.LOGGER.info("EBS click: tree#{} content={} isEmpty={} isGoal={}", hit.treeIndex(),
+                    hit.content(), hit.content().isEmpty(), hit.isGoal());
             if (hit.content() instanceof TagEmiIngredient) {
                 RecipeScreen.resolve = hit.content();
                 EmiApi.displayRecipes(hit.content());

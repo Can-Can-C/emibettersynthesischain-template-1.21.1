@@ -2,6 +2,7 @@ package com.cancan.emibettersynthesischain.client;
 
 import java.util.List;
 
+import dev.emi.emi.api.recipe.EmiRecipe;
 import dev.emi.emi.api.stack.EmiIngredient;
 
 /**
@@ -28,8 +29,11 @@ public record TreeData(
         return goal == null || goal.content() == null;
     }
 
-    /** 树节点：内容 + 玩家当前是否可**获得**（自身够或链条可合成，否则标红）+ 标签解析到的具体物品（无则 null）。 */
-    public record TreeItem(EmiIngredient content, boolean canCraft, EmiIngredient resolvedTo) {
+    /**
+     * 树节点：内容 + 玩家当前是否可**获得**（自身够或链条可合成，否则标红）+ 标签解析到的具体物品（无则 null）
+     * + 产出该材料的配方（{@code null} = 无配方/叶节点/直接获取）。供 tooltip 明细展示。
+     */
+    public record TreeItem(EmiIngredient content, boolean canCraft, EmiIngredient resolvedTo, EmiRecipe producer) {
         public boolean hasResolved() {
             return resolvedTo != null && !resolvedTo.isEmpty();
         }

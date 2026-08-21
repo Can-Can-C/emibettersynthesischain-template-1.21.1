@@ -40,6 +40,8 @@ public class TreeManager {
 
     private final List<ItemStack> items = new ArrayList<>();
     private final List<ResourceLocation> recipeIds = new ArrayList<>();
+    /** 每条目的"单次合成数量"（仅会话内，默认 1，范围 1-999，重启回 1；每树独立）。 */
+    private final List<Integer> amounts = new ArrayList<>();
     private final List<String> pending = new ArrayList<>();
     private boolean dirty = true;
     private boolean resolved = false;
@@ -61,6 +63,26 @@ public class TreeManager {
     public ResourceLocation getRecipeId(int index) {
         resolvePending();
         return index >= 0 && index < recipeIds.size() ? recipeIds.get(index) : null;
+    }
+
+    /** 该树（条目）的"单次合成数量"（默认 1）。 */
+    public int getAmount(int index) {
+        resolvePending();
+        return index >= 0 && index < amounts.size() ? amounts.get(index) : 1;
+    }
+
+    /** 设置该树的"单次合成数量"（1-999，会话内；落盘）。 */
+    public void setAmount(int index, int amount) {
+        resolvePending();
+        if (index < 0 || index >= amounts.size()) {
+            return;
+        }
+        int clamped = Math.max(1, Math.min(999, amount));
+        if (amounts.get(index) != clamped) {
+            amounts.set(index, clamped);
+            dirty = true;
+            save();
+        }
     }
 
     public boolean isDirty() {
@@ -97,6 +119,7 @@ public class TreeManager {
         }
         items.add(copy);
         recipeIds.add(recipeId);
+        amounts.add(1);
         dirty = true;
         TreeMode.requestScrollToBottom();
         EMIBettersynthesischain.LOGGER.info("EBS added tree item: {}, total={}", copy, items.size());
@@ -123,6 +146,7 @@ public class TreeManager {
             if (ItemStack.isSameItemSameComponents(items.get(i), stack)) {
                 ItemStack removed = items.remove(i);
                 recipeIds.remove(i);
+                amounts.remove(i);
                 dirty = true;
                 EMIBettersynthesischain.LOGGER.info("EBS removed tree item: {}, total={}", removed, items.size());
                 save();
@@ -138,6 +162,7 @@ public class TreeManager {
         }
         ItemStack removed = items.remove(index);
         recipeIds.remove(index);
+        amounts.remove(index);
         dirty = true;
         EMIBettersynthesischain.LOGGER.info("EBS removed tree item: {}, total={}", removed, items.size());
         save();
@@ -161,12 +186,14 @@ public class TreeManager {
             JsonArray arr = obj.getAsJsonArray("items");
             for (JsonElement e : arr) {
                 if (e.isJsonObject()) {
-                    // 新格式：{"item": <nbt>, "recipe": <id 或空>}
+                    // 新格式：{"item": <nbt>, "recipe": <id 或空>, "amount": <数量 可选>}
                     JsonObject o = e.getAsJsonObject();
                     if (o.has("item")) {
                         String item = o.get("item").getAsString();
                         String recipe = o.has("recipe") ? o.get("recipe").getAsString() : null;
-                        pending.add("ITEM:" + item + (recipe == null ? "" : "|RECIPE:" + recipe));
+                        int amount = o.has("amount") ? o.get("amount").getAsInt() : 1;
+                        pending.add("ITEM:" + item + (recipe == null ? "" : "|RECIPE:" + recipe)
+                                + "|AMOUNT:" + amount);
                     }
                 } else if (e.isJsonPrimitive() && e.getAsJsonPrimitive().isString()) {
                     // 旧格式：纯 NBT 或纯 item id
@@ -189,19 +216,27 @@ public class TreeManager {
         }
         RegistryAccess access = mc.level.registryAccess();
         for (String raw : pending) {
-            String itemPart = raw;
             ResourceLocation recipeId = null;
+            int amount = 1;
+            // 可选段（固定顺序 item |RECIPE:<id> |AMOUNT:<n>）
+            int sepAmt = raw.indexOf("|AMOUNT:");
+            if (sepAmt >= 0) {
+                try {
+                    amount = Math.max(1, Math.min(999, Integer.parseInt(raw.substring(sepAmt + 8))));
+                } catch (NumberFormatException ignored) {
+                }
+                raw = raw.substring(0, sepAmt);
+            }
             int sep = raw.indexOf("|RECIPE:");
             if (sep >= 0) {
-                itemPart = raw.substring(0, sep);
-                String id = raw.substring(sep + "|RECIPE:".length());
-                if (!id.isEmpty()) {
-                    recipeId = ResourceLocation.tryParse(id);
-                }
+                recipeId = ResourceLocation.tryParse(raw.substring(sep + 8));
+                raw = raw.substring(0, sep);
             }
+            String itemPart = raw;
             if (itemPart.startsWith("ITEM:")) {
                 itemPart = itemPart.substring("ITEM:".length());
             }
+            final int amt = amount;
             if (itemPart.startsWith("{")) {
                 try {
                     CompoundTag tag = TagParser.parseTag(itemPart);
@@ -209,6 +244,7 @@ public class TreeManager {
                     ItemStack.parse(access, tag).ifPresent(stack -> {
                         items.add(stack);
                         recipeIds.add(rid);
+                        amounts.add(amt);
                     });
                 } catch (Exception ex) {
                     EMIBettersynthesischain.LOGGER.warn("Failed to parse tree entry: {}", itemPart, ex);
@@ -218,6 +254,7 @@ public class TreeManager {
                 if (key != null && BuiltInRegistries.ITEM.containsKey(key)) {
                     items.add(new ItemStack(BuiltInRegistries.ITEM.get(key)));
                     recipeIds.add(recipeId);
+                    amounts.add(amt);
                 }
             }
         }
@@ -245,6 +282,7 @@ public class TreeManager {
                 if (rid != null) {
                     o.add("recipe", new JsonPrimitive(rid.toString()));
                 }
+                o.add("amount", new JsonPrimitive(getAmount(i)));
                 arr.add(o);
             }
             JsonObject obj = new JsonObject();

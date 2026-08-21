@@ -1,17 +1,21 @@
 package com.cancan.emibettersynthesischain.mixin;
 
+import org.lwjgl.glfw.GLFW;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
+import com.cancan.emibettersynthesischain.client.AutoCraftClient;
 import com.cancan.emibettersynthesischain.client.IEmiInternal;
 import com.cancan.emibettersynthesischain.client.InternalHelperImpl;
 import com.cancan.emibettersynthesischain.client.TreeMode;
+import com.cancan.emibettersynthesischain.client.TreeRenderer;
 
 import dev.emi.emi.api.stack.EmiStackInteraction;
 import dev.emi.emi.api.widget.Bounds;
 import dev.emi.emi.screen.EmiScreenManager;
+import net.minecraft.client.gui.screens.Screen;
 
 /**
  * 滚轮路由 + 树区悬停屏蔽。
@@ -33,6 +37,21 @@ public abstract class EmiScreenManagerMixin {
         }
         if (!bounds.contains((int) mouseX, (int) mouseY)) {
             return; // 不在收藏面板上：走 EMI 原逻辑（不滚动树）
+        }
+        // 悬停最终产物：滚轮调节"单次合成数量"（Shift ±10、Ctrl 翻倍/减半），消费事件不滚动树
+        TreeRenderer.Hit hit = TreeRenderer.hitTest(bounds.x(), bounds.y(), bounds.width(), bounds.height(),
+                helper.buildTrees(), (int) mouseX, (int) mouseY);
+        if (hit != null && hit.isGoal()) {
+            int dir = amount > 0 ? 1 : -1;
+            int mods = 0;
+            if (Screen.hasControlDown()) {
+                mods |= GLFW.GLFW_MOD_CONTROL;
+            } else if (Screen.hasShiftDown()) {
+                mods |= GLFW.GLFW_MOD_SHIFT;
+            }
+            AutoCraftClient.adjustAmount(hit.treeIndex(), dir, mods); // 只调节悬停的那棵树
+            cir.setReturnValue(true);
+            return;
         }
         TreeMode.addScroll((int) -amount);
         cir.setReturnValue(true); // 消费事件，阻止 EMI 页面/原版再滚动

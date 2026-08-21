@@ -1,5 +1,7 @@
 package com.cancan.emibettersynthesischain.client;
 
+import java.util.List;
+
 import dev.emi.emi.api.recipe.EmiRecipe;
 import dev.emi.emi.api.recipe.EmiPlayerInventory;
 import dev.emi.emi.api.recipe.handler.EmiRecipeHandler;
@@ -9,6 +11,8 @@ import dev.emi.emi.api.stack.EmiStack;
 import dev.emi.emi.registry.EmiRecipeFiller;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 
 /**
@@ -25,6 +29,12 @@ public final class CraftInventory {
     public static EmiPlayerInventory currentScreenInventory() {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player != null && mc.screen instanceof AbstractContainerScreen<?> screen) {
+            // AE2 合成终端：自建"槽位 + 网络"合并库存（AE2 的 exposeNetworkInventoryToEmi 默认 false，
+            // 此时 handler.getInventory 不含网络 → 树标红/预检看不到网络材料）
+            EmiPlayerInventory ae2 = Ae2Support.mergedInventory(screen);
+            if (ae2 != null) {
+                return ae2;
+            }
             try {
                 for (EmiRecipeHandler h : EmiRecipeFiller.getAllHandlers(screen)) {
                     if (h instanceof StandardRecipeHandler<?>) {
@@ -42,6 +52,11 @@ public final class CraftInventory {
     public static EmiPlayerInventory current(EmiRecipe recipe) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player != null && mc.screen instanceof AbstractContainerScreen<?> screen) {
+            // AE2 合成终端：同上，自建合并库存（链条预检 must 看到网络，才能走到 REFILL 拉料）
+            EmiPlayerInventory ae2 = Ae2Support.mergedInventory(screen);
+            if (ae2 != null) {
+                return ae2;
+            }
             try {
                 EmiRecipeHandler handler = EmiRecipeFiller.getFirstValidHandler(recipe, screen);
                 if (handler != null) {
@@ -53,7 +68,9 @@ public final class CraftInventory {
         return EmiPlayerInventory.of(mc.player);
     }
 
-    /** 给定库存快照里该材料的总数量（标签匹配任一成员；组件感知）。 */
+    /** 给定库存快照里该材料的总数量（标签匹配任一成员；组件感知）。
+     *  饱和加法：异常大数量（如 AE2 无限存储，已在 mergedInventory 钳制）也不溢出为负数。
+     *  Productive Bees：蜜蜂品种（虚拟 EmiStack）与蜂笼物品（同品种）等价计数。 */
     public static long count(EmiPlayerInventory inv, EmiIngredient content) {
         long total = 0;
         for (EmiStack merged : inv.inventory.values()) {
@@ -63,8 +80,23 @@ public final class CraftInventory {
             }
             for (EmiStack member : content.getEmiStacks()) {
                 ItemStack m = member.getItemStack();
-                if (!m.isEmpty() && ItemStack.isSameItemSameComponents(m, item)) {
-                    total += merged.getAmount();
+                if (m == null || m.isEmpty()) {
+                    // Productive Bees 蜜蜂品种（BeeEmiStack getItemStack 空）→ 匹配蜂笼物品（同品种）
+                    net.minecraft.resources.ResourceLocation beeType = ProductiveBeesSupport.beeTypeOf(member);
+                    if (beeType != null && beeType.equals(ProductiveBeesSupport.beeTypeOfStack(item))) {
+                        long add = merged.getAmount();
+                        if (add > 0) {
+                            total = (total > Long.MAX_VALUE - add) ? Long.MAX_VALUE : total + add;
+                        }
+                        break;
+                    }
+                    continue;
+                }
+                if (ItemStack.isSameItemSameComponents(m, item)) {
+                    long add = merged.getAmount();
+                    if (add > 0) {
+                        total = (total > Long.MAX_VALUE - add) ? Long.MAX_VALUE : total + add;
+                    }
                     break;
                 }
             }

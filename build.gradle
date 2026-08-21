@@ -159,6 +159,12 @@ dependencies {
     def ae2Jar = files("libs/appliedenergistics2-19.2.17.jar")
     compileOnly ae2Jar
 
+    // Productive Bees (实用蜜蜂) is an optional mod dependency for displaying bee-breeding
+    // recipes in the tree (bees are data-driven virtual EmiStacks whose getItemStack() is
+    // EMPTY; we normalize them to the BeeCage item). compileOnly here, runtime from run/mods.
+    def productiveBeesJar = files("libs/productivebees-1.21.1-13.13.3.jar")
+    compileOnly productiveBeesJar
+
 }
 
 // This block of code expands all declared replace properties in the specified resource targets.

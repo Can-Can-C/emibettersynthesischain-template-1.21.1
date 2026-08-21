@@ -212,6 +212,21 @@ src/main/java/com/cancan/emibettersynthesischain/
 - **`TreeAddFlag`**：`setGoal→viewRecipeTree` 判定窗口从 50ms 硬编码提为常量 **`ADD_WINDOW_NANOS = 500ms`**；两事件在 EMI 同一帧/调用栈紧邻发生，放宽窗口降低慢机卡顿下"添加"被误判为"切换"的概率，仍能区分左下角树按钮的纯切换。
 - **`ClientCraftChain.tick`**：无玩家 / 无世界（切存档、断开连接）时**清理全局 `active`**——否则残留会让 `start()` 一直返回 `false`（"已进行中"），自动合成永久失效直至重启。
 
+### 9.7 AE2 终端内自动合成：网络材料识别与放料（需求 11，v2.1.1）
+- **根因（javap 实证 AE2 19.2.17）**：
+  1. **识别层**：AE2 的 `AbstractRecipeHandler.getInventory` 只在配置 `exposeNetworkInventoryToEmi=true`（**默认 false**，反汇编 `iconst_0`，注释还警告"可能引起性能问题"）时把 `getClientRepo().getAllEntries()` 并进库存；默认关闭时 handler 的库存**只有玩家背包槽** → 树标红/链条预检看不到网络。
+  2. **放料层**：EMI `EmiRecipeFiller.getStacks/clientFill` 内部用 `handler.getInventory` 判断可合成（同上不含网络），且放料只能从 `getInputSources`（= PLAYER_INVENTORY + PLAYER_HOTBAR + CRAFTING_GRID，**无网络**）拾取 → 背包无料时 `getStacks` 返回 null，放料失败"无法放置该配方的材料"。
+- **识别方案（`Ae2Support.mergedInventory(screen)`）**：**不依赖 AE2 配置**，自建"玩家背包槽位（inputSources）+ 网络存储条目（`getClientRepo().getAllEntries()`，`storedAmount>0`）"合并 `EmiPlayerInventory`；网络条目用 AE2 自己的 `EmiStackHelper.toEmiStack(GenericStack)` 转换（组件保真、数量无 64 上限）。`CraftInventory.currentScreenInventory()/current(recipe)` 在 AE2 合成终端（`CraftingTermMenu`）**优先返回合并库存** → 树标红（`invSnapshot`）、链条预检（`canAfford`/`goalReady`/`findProducerToCraft`）全链路可见网络。门禁：未装 AE2 返回 null 回退原逻辑（`ModList.isLoaded("ae2")` 短路，方法体惰性引用 AE2 类）。
+- **放料方案（`ClientCraftChain.fillViaEmi` AE2 分支）**：AE2 终端**不走 EMI clientFill**（其 getStacks 依赖 AE2 配置的 getInventory，网络不可见），改调 **`handler.craft(recipe, ctx)`** = AE2 的 `transferRecipe(recipe, ctx, true)`：
+  - `isCraftingRecipe` 校验 → `fitsIn3x3Grid` → `getGuiSlotToIngredientMap`（配方输入→合成格槽位）→ **`CraftingTermMenu.findMissingIngredients`**（javap 实证：查合成格/玩家背包/**网络**缺料）→ 服务端从**背包+网络**提取材料放进合成格（AE2 网络借料机制，一步到位）。
+  - 普通界面（工作台/背包/精妙背包等）保持 EMI clientFill 不变。
+- **默认配方唯一（用户指定策略"设默认，断了就断了"）**：
+  - 树标红 `InternalHelperImpl.producersOf`（canObtain 用）：**只用默认配方**——preferred（父配方视角/该材料已解析默认）优先，否则 `BoM.getRecipe(content)`（玩家设为默认 / EMI 数据默认）；删除 `buildProducers`（`getRecipesByOutput` 全部候选）与 `producerCache`。默认链断 → 标红。
+  - 链条 `ClientCraftChain.findProducerToCraft`：**只用 `BoM.getRecipe`**（默认），不逐个尝试其它产出配方；默认不可用/非工作台/祖先栈防环 → null → 链条停止（"材料不足"/"该配方无法在工作台内进行"）。
+  - 树标红与链条口径一致，不再出现"树绿但合不了"。
+- **3×3 合成格认可**：`InternalHelperImpl.hasCraftingMenuOpen` 增加 **AE2 合成终端**判定（`containerMenu instanceof CraftingMenu || Ae2Support.isCraftingTermMenu(...)`）——AE2 合成格为 3×3，与工作台等价；否则中间 3×3 材料在 AE2 终端被误标红（"只能检测一层"）。
+- **与既有路径关系**：AE2 取产物仍走 `Ae2Support.takeOutput`（CRAFT_ITEM）+ `clearCraftingGrid`（网络借料后清格，v2.1.0 既有逻辑）；放料材料来源（背包/网络）由 AE2 transferRecipe 管理，不改变取产物/清格行为。
+
 ## 10. 批量特性（Q1-Q6，拟 v2.1.0）
 
 > 与需求 6-10 对应；每项均为新增/增强，不破坏既有路径。详见 `update.md`。
@@ -261,3 +276,40 @@ src/main/java/com/cancan/emibettersynthesischain/
   - `Destination.CURSOR` 不可用：余料留光标 → "合成结束物品卡鼠标"。
 - **合成格 fit 检查**：弃用 EMI `EmiCraftingRecipe.canFit(w,h)`（对 3×3 配方在 2×2 返回 true 不可靠），改用**配方非空输入 bounding box** 判定（`fitsGrid`）：3×3 shaped 算包围盒宽高 ≤ 网格宽高；shapeless 按非空数 ≤ 格数。背包 2×2 → 3×3 配方被拦截提示"需打开工作台"。
 - **代码清理**：删除手写放料全部死代码（`buildPlacementClicks`/`onClickTick`/`CLICK` phase/`clickQueue`/`findSource`/`matches`），ClientCraftChain 从 563 行精简到 ~280 行。
+
+## 11. Phase 4 三项（需求 12-14）
+
+### 11.1 树节点 tooltip 明细（需求 12）
+- `TreeData.TreeItem` 增加 `EmiRecipe producer`（产出该材料的配方；叶节点/无配方为 null）——构建时传 `Agg.recipe`（`InternalHelperImpl.buildTree` 的 goal/directInputs/rows；leafTotal 传 null）。
+- `TreeRenderer.appendDetailLines`：在原版 `getTooltipText()` 后追加 `需要: X`、`拥有: Y（不足红字，材料节点）`、`由 <配方输出名> 合成 / 库存直接获取`、`可合成（绿）/ 材料不足（红）`。`Placed` 增加 producer 透传。
+- 数量格式复用 `formatItemAmount` / `formatFluidAmount`（k/M/G/T 与 mB/L）。
+
+### 11.2 单次合成数量可配置（需求 13，**每树独立**）
+- 状态：**每树独立**（`TreeManager` 每条目 `amounts`，默认 1，1-999，落盘 `amount` 字段兼容旧档，重启回 1）。
+- 调节：**滚轮**（`EmiScreenManagerMixin` 悬停最终产物，`adjustAmount(treeIndex, dir, mods)` **只改悬停树**）+ **键盘 +/-**（`hoveredTreeIndex` 定位悬停树）；Shift ±10、Ctrl 翻倍/减半；提示"N"。
+- **V 定量**：`ClientCraftChain.start(..., targetAmount)` 用**悬停树的数量**；V 模式 `remainingTarget` 按实际增量（`lastOutputGain`）扣减。
+- **树按 N 倍展示**：`buildTrees` 每树用 `TreeManager.getAmount(i)` → `buildTree(goal, recipeId, treeAmount)`（目标 need=N、材料 N 倍、标红按 N 判）。
+- **批量调度**：`pickNext` 批量前瞻 `lookaheadBatches()`（V=剩余份数换算上限 16 / Shift+V·Ctrl+V=16 循环）+ `goalReadyFor(batches)`；`lastProducer` 复用（中间步同一配方连续合成不切换）；force 保持单批；步数上限 V 定量按 N 放宽。
+- **批量放料（普通界面 + AE2 通用）**：`batchAmount()`（目标=lookahead 剩余批；中间=需求÷单批输出；上限 16）→ `EmiRecipeFiller.getStacks(recipe, batch)` + `clientFill` 放 **B 份堆叠进合成格**（合成前检测：库存不足降级单批）→ 取产物 shift 快速合成（普通）或 CRAFT_SHIFT 消耗合成格堆叠（AE2，不依赖网络补料）。
+- **AE2 批量策略（CRAFT_SHIFT 按需，避免超量）**：CRAFT_SHIFT 数量固定一组 64 → 仅需求 ≥ 一组时批量、余数 CRAFT_ITEM 单批精确；中间步需求视野=目标剩余全部批次（V 定量，连续多组零超量）；背包材料也批量（clientFill 堆叠放料优先，网络放料 `handler.craft` 回退）。
+- **AE2 光标放回同步冷却**：`placeCursorIntoInventory` 发出 PICKUP 后 2s 冷却（`placeSyncUntil`），窗口内光标非空视为"放回同步中"不重复发——防"服务端光标已空 → 再 PICKUP 把背包产物拾回光标"死循环。
+
+### 11.5 Productive Bees 蜜蜂配方显示（可选联动，零硬依赖）
+- **背景（javap 实证 13.13.3）**：蜜蜂是"实体 + 数据驱动品种"；EMI 用自定义 `BeeEmiStack`（**没有 override getItemStack() → EMPTY**；`getId()` = 品种）→ 树的 ItemStack 体系无法直接持有蜜蜂；繁殖/生成配方**非工作台**（繁殖箱）→ 不自动合成（仅显示）。
+- **持久化**：`ProductiveBeesSupport.toBeeCageStack` 蜜蜂 EmiStack → **蜂笼物品标记**（`BeeCage` + `CUSTOM_DATA.type=<品种>`，**不伪造 entity 官方字段**——仅作树内部品种 id 载体，不对外表现为合法蜂笼）；`beeTypeOfStack` 读 type。
+- **树显示**：目标/材料用**配方输出/输入的原始 BeeEmiStack**（`buildTree` 对蜜蜂目标取 `resolveGoalRecipe` 配方输出——**与原版 EMI 渲染同路径**，不自造 BeeEmiStack）；`key()` 蜜蜂 EmiStack 与蜂笼物品统一 `bee:<品种>`；`CraftInventory.count` 蜜蜂↔蜂笼等价计数（拥有量/标红准确）；`hasEnough` 蜜蜂按蜂笼计数（不走"空物品视为足够"）。
+- **tooltip 名字**：`getTooltipText()` 在品种数据缺失时跳过名字行 → 第一行若是 id 形式（含 `:`）→ 补 `getName()`（translatable，官方翻译机制，非硬编码）。
+- **门禁**：`ModList.isLoaded("productivebees")` 短路；`compileOnly libs/productivebees-1.21.1-13.13.3.jar`（运行时 run/mods）。
+- **自动合成**：蜜蜂配方的目标/中间保持"仅工作台配方"拦截（繁殖箱非工作台，提示"该配方无法在工作台内进行"）。
+
+### 11.3 树面板拖动调宽（需求 14）~~（已取消，2026-08-16 用户要求移除）~~
+- 功能已从代码中移除（`TreeMode`/`EMIBettersynthesischainClient` 无宽度拖动）；面板宽度仍由 `treeSidebarWidth` 配置 + EMI 设置页调整。
+
+### 11.4 已知限制与防御性启发式（兼容性原则审查后记录，2026-08-16）
+以下为有依据但属**假设/启发式**的实现，若相关机制变化需回归（不视为硬编码违规，但需知晓）：
+- **`isReverse`（分解类启发式）**：输出数量 > 输入数量 且 可逆 → 判"分解配方"并跳过（目标选择回退用）。原版无"分解"标记，纯数量启发式；误判场景罕见且祖先栈防环兜底。
+- **防御性上限**：worklist `guard 3000`、链条 `MAX_STEPS 128`（V 定量 +min(N,4096)）、`MAX_BATCH_LOOKAHEAD 16`、`canObtain` 深度 8（防递归指数爆炸；更深链保守标红）。
+- **`TreeAddFlag` 500ms 窗口**：EMI `setGoal→viewRecipeTree` 事件间隔实测假设（慢机放宽）。
+- **`BoMScreenMixin` 缩略条尺寸**：对原版 `BoMScreen` 左侧布局的自绘叠加层（mod 自身 UI，非第三方数据）。
+- **`resultRetryTicks`（AE2 12 / 普通 2 tick）**：服务端同步时序实测值。
+- **`hasEnough`"流体/空视为足够"**：原版流体非 ItemStack 不可计数，保守简化（不据此判不足）。

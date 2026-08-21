@@ -26,6 +26,18 @@ NeoForge 1.21.1 / EMI 1.1.24 的 EMI 附属 mod：重写配方树展示 + 自动
 7. **安全（v2.0.0 起纯客户端）**：自动合成只发 vanilla 点击包，**防作弊由 vanilla 点击校验兜底**；不引入自定义 payload/服务端合成逻辑。新增可选 mod 联动（AE2）时保持门禁短路，未装该 mod 功能静默关闭。
 8. **小步推进**：严格按 `docs/03` 分阶段，每阶段独立验证后再进入下一阶段；不一口气做太多。
 
+## 兼容性原则（最高优先）
+本 mod 是 **EMI 附属 + 可选 mod 联动**（AE2、Productive Bees 等），**兼容性是第一要求**。任
+
+何第三方联动都必须遵守：
+
+1. **不硬编码第三方内容**：禁止用"美化/猜测"的方式适配第三方数据（如按 id 前缀美化品种名、猜 NBT 结构、硬编码 id/名称规则）——第三方内容会因**数据包 / 版本 / 新增内容**变化，硬编码不通用、易破坏。**反例**：Productive Bees 蜜蜂名曾用 `fixBeeDisplayName` 手写规则美化（已删除）——改用对方**官方 API**（`BeeEmiStack.getTooltip()/getName()` 的翻译机制）。
+2. **优先使用对方官方机制**：适配第三方 mod 时，优先调它的**公开 API / 官方表示**（原始 `EmiStack`、官方转换器、官方数据），与原版/官方表现保持一致；**不做推测性转换**（如虚拟 EmiStack 无法转 ItemStack 时，用对方提供的表示，不自造）。
+3. **门禁短路**：所有可选联动必须 `ModList.isLoaded(<modid>)` 门禁，方法体惰性引用第三方类——**未装该 mod 不加载其类、功能静默关闭、不报错**（如 `Ae2Support`、`ProductiveBeesSupport`）。
+4. **本地 jar 编译依赖**：第三方联动用 `compileOnly` + `libs/` 本地 jar（不引 maven）；运行时由 `run/mods` 加载；**不打进 mod 包**。
+5. **升级回归**：升级 EMI 或任一联动 mod 版本，必须回归所有注入点与联动路径；第三方新版本可能改变内部行为（数据缺失、api 变动）。
+6. **表现层与数据层一致**：能显示对方原生表示时**不要转成自己的近似表示**；确需转换时走官方转换器（如 AE2 的 `EmiStackHelper`），并在设计文档记录依据（javap 实证）。
+
 ## 技术要点速查
 - 树按钮：`EmiScreenManager.tree` → `EmiApi.viewRecipeTree()`（`mixin/EmiApiMixin` 拦截点）。
 - **EMI 内部访问隔离**：业务代码只依赖 `client/IEmiInternal`（接口）+ `TreeData`（纯业务模型）；EMI 内部类引用只在 `client/InternalHelperImpl.java` 与 `mixin/` 中；访问 EMI 私有成员用 `@Accessor` 接口 mixin（"目标实例 cast 到接口"）。升级 EMI 只改这些地方。
