@@ -218,12 +218,18 @@ public class InternalHelperImpl implements IEmiInternal {
             List<TreeData> trees = new ArrayList<>();
             for (int i = 0; i < TreeManager.INSTANCE.size(); i++) {
                 ItemStack item = TreeManager.INSTANCE.getItem(i);
-                // 树显示：普通物品原样；Productive Bees 蜜蜂（持久化为蜂笼）→ buildTree 内用
-                // 配方输出的原始蜜蜂 EmiStack 显示（原版 EMI 同路径，渲染蜜蜂本体）
-                TreeData tree = buildTree(EmiStack.of(item), TreeManager.INSTANCE.getRecipeId(i),
-                        TreeManager.INSTANCE.getAmount(i));
-                if (tree != null && !tree.isEmpty()) {
-                    trees.add(tree);
+                // 需求 16：单树构建容错——个别异常配方（虚拟栈/奇异性）不拖垮整批缓存；跳过并记日志
+                try {
+                    // 树显示：普通物品原样；Productive Bees 蜜蜂（持久化为蜂笼）→ buildTree 内用
+                    // 配方输出的原始蜜蜂 EmiStack 显示（原版 EMI 同路径，渲染蜜蜂本体）
+                    TreeData tree = buildTree(EmiStack.of(item), TreeManager.INSTANCE.getRecipeId(i),
+                            TreeManager.INSTANCE.getAmount(i));
+                    if (tree != null && !tree.isEmpty()) {
+                        trees.add(tree);
+                    }
+                } catch (Exception e) {
+                    EMIBettersynthesischain.LOGGER.warn("EBS skip tree {}: {}", item, e.toString());
+                    e.printStackTrace();
                 }
             }
             treeCache = trees;
@@ -427,13 +433,14 @@ public class InternalHelperImpl implements IEmiInternal {
         // 目标节点按 N 份判断能否获得（goalAgg.need = 目标份数）
         TreeData.TreeItem goalItem = new TreeData.TreeItem(goalDisp,
                 canObtain(goalDisp, goalAgg.need, goalAgg.recipe, 0, new HashSet<>()), resolvedToFor(goalAgg),
-                goalAgg.recipe);
+                goalAgg.recipe, resolveStateOf(goalAgg.recipe, goalDisp));
         List<TreeData.TreeItem> directItems = new ArrayList<>();
         for (EmiIngredient input : directInputs) {
             Agg agg = aggs.get(key(input));
             directItems.add(new TreeData.TreeItem(input,
                     canObtain(input, input.getAmount(), agg == null ? null : agg.recipe, 0, new HashSet<>()),
-                    resolvedToFor(agg), agg == null ? null : agg.recipe));
+                    resolvedToFor(agg), agg == null ? null : agg.recipe,
+                    resolveStateOf(agg == null ? null : agg.recipe, input)));
         }
         List<List<TreeData.TreeItem>> rowItems = new ArrayList<>();
         for (List<EmiIngredient> row : rows) {
@@ -442,7 +449,8 @@ public class InternalHelperImpl implements IEmiInternal {
                 Agg agg = aggs.get(key(ing));
                 items.add(new TreeData.TreeItem(ing,
                         canObtain(ing, ing.getAmount(), agg == null ? null : agg.recipe, 0, new HashSet<>()),
-                        resolvedToFor(agg), agg == null ? null : agg.recipe));
+                        resolvedToFor(agg), agg == null ? null : agg.recipe,
+                        resolveStateOf(agg == null ? null : agg.recipe, ing)));
             }
             rowItems.add(items);
         }
@@ -457,7 +465,8 @@ public class InternalHelperImpl implements IEmiInternal {
             }
             leafTotal.add(new TreeData.TreeItem(agg.content.copy().setAmount(Math.max(1, agg.need)),
                     true, // 叶节点 = 库存已足可提供
-                    resolvedToFor(agg), null)); // 叶节点无产出配方
+                    resolvedToFor(agg), null, // 叶节点无产出配方
+                    resolveStateOf(null, agg.content)));
         }
         // 保持视觉稳定：已解析标签在前，再按内容键排序（避免 HashMap 乱序）
         leafTotal.sort((a, b) -> {
@@ -502,6 +511,37 @@ public class InternalHelperImpl implements IEmiInternal {
             // 无法确认足够时按"不足"处理（标红保守），不再掩盖错误静默放行
             return false;
         }
+    }
+
+    /**
+     * 需求 16：节点解析状态——有配方 → RESOLVED；无配方但可转 ItemStack（可计数，含蜂笼等价蜜蜂）→
+     * LEAF_KNOWN；无配方且不可计数（虚拟/自定义栈）→ LEAF_UNKNOWABLE。
+     * 需求量永远由父配方输入量提供（见 addNeed），与 EMI TreeCost recipe==null 分支同语义。
+     */
+    private static TreeData.ResolveState resolveStateOf(EmiRecipe producer, EmiIngredient content) {
+        if (producer != null) {
+            return TreeData.ResolveState.RESOLVED;
+        }
+        if (content == null) {
+            return TreeData.ResolveState.LEAF_UNKNOWABLE;
+        }
+        try {
+            List<EmiStack> stacks = content.getEmiStacks();
+            if (stacks.isEmpty()) {
+                return TreeData.ResolveState.LEAF_UNKNOWABLE;
+            }
+            for (EmiStack s : stacks) {
+                ItemStack item = s.getItemStack();
+                if (item != null && !item.isEmpty()) {
+                    return TreeData.ResolveState.LEAF_KNOWN; // 任一成员可转物品 → 可计数
+                }
+                if (ProductiveBeesSupport.isBeeEmiStack(s)) {
+                    return TreeData.ResolveState.LEAF_KNOWN; // 蜜蜂可计数（蜂笼等价，既有分支）
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return TreeData.ResolveState.LEAF_UNKNOWABLE;
     }
 
     /** 标签节点解析到的具体物品：始终查 BoM.getRecipe(tag)（即使因背包已够未拆解也保留）。非标签返回 null。 */
