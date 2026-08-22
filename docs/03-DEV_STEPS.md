@@ -108,6 +108,15 @@
 - **验收**：10.3 "AE/背包中存储物读取不准"修复复测通过（树缓存刷新检测扩展 + 合并库存扩展到所有 ME 终端）。
 - **构建**：`./gradlew build` → BUILD SUCCESSFUL；产物 `build/libs/emibettersynthesischain-2.2.1.jar`（`gradle.properties` `mod_version=2.2.1`）。
 
+## Phase 11 — 多版本开发（需求 15，2026-08-22 启动）
+- 策略见 `docs/05-MULTI_VERSION.md`；分支：`1.20.1-forge` / `26.1.2-neoforge`（同仓多分支，main 主线保留）。
+- [ ] 11.1 **分支与空骨架**：两分支构建工具链跑绿（`./gradlew build` 出空 mod jar；1.20.1 用 ForgeGradle 6 + Gradle 8.x wrapper；26.1.2 用兼容的 NeoGradle/moddev 版本）。
+- [ ] 11.2 **核心移植**：合成树数据/渲染/交互（mixins 注入点逐 jar javap 核对；`hashItemAndComponents`/`isSameItemSameComponents` 等 MC 差异适配；Forge 版换 `ForgeConfigSpec`/`ModList`/`PacketDistributor` 路径）。runClient 验收树展示。
+- [ ] 11.3 **自动合成**：AutoCraftClient / ClientCraftChain / CraftInventory / MessageOverlay + 快捷键（纯客户端 vanilla 点击包，两版本同一机制）。
+- [ ] 11.4 **配置与 UI**：Config / ConfigScreenMixin（含配色 EnumWidget）/ ConfigResetButton / lang。
+- [ ] 11.5 **联动移植**：Ae2Support（分支 AE2 jar 门禁 + 发包路径）、Productive Bees、批量/每树数量。
+- [ ] 11.6 **验收发布**：两分支 runClient 全量验收（对照主线 2.2.1），文档同步，分支独立版本发布并上传。
+
 ## Phase 7 — v2.1.1 AE2 终端网络拉料（需求 11）
 - [x] 7.1 **实现**：`Ae2Support.mergedInventory`（自建"槽位+网络"合并库存，不依赖 AE2 的 exposeNetworkInventoryToEmi 配置，默认 false 时 handler.getInventory 不含网络）；`CraftInventory.currentScreenInventory/current` AE2 终端优先用合并库存；`ClientCraftChain.fillViaEmi` AE2 分支走 **AE2 原生 handler.craft（transferRecipe）**（服务端从背包+网络取料，替代 clientFill——其 getStacks 依赖 AE2 配置的 getInventory）；树标红 `producersOf` 与链条 `findProducerToCraft` 统一**只用默认配方**（BoM.getRecipe，断了就停）；`hasCraftingMenuOpen` 认可 AE2 合成格（3×3）。`./gradlew build` → BUILD SUCCESSFUL。
 - [x] 7.2 **用户 runClient 验收通过**：AE2 终端、背包无料仅网络有料 → V 自动合成成功（材料直接网络进合成格→合成→取产物）；树按默认配方识别（默认链断即红）；中间层按默认配方链合成；Shift+V 连续；AE2 未装环境不受影响。**（✅ 已验收 2026-08-15）**
