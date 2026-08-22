@@ -33,8 +33,8 @@ public abstract class EmiScreenManagerMixin {
                 return org.lwjgl.glfw.GLFW.glfwGetKey(Minecraft.getInstance().getWindow().handle(), org.lwjgl.glfw.GLFW.GLFW_KEY_LEFT_SHIFT) == org.lwjgl.glfw.GLFW.GLFW_PRESS
                 || org.lwjgl.glfw.GLFW.glfwGetKey(Minecraft.getInstance().getWindow().handle(), org.lwjgl.glfw.GLFW.GLFW_KEY_RIGHT_SHIFT) == org.lwjgl.glfw.GLFW.GLFW_PRESS;
     }
-    @Inject(method = "mouseScrolled", at = @At("HEAD"), cancellable = true)
-    private static void ebs$mouseScrolled(double mouseX, double mouseY, double amount,
+    @Inject(method = "mouseScrolled(DDDD)Z", at = @At("HEAD"), cancellable = true)
+    private static void ebs$mouseScrolled(double mouseX, double mouseY, double amountH, double amount,
             CallbackInfoReturnable<Boolean> cir) {
         if (!TreeMode.isActive()) {
             return;

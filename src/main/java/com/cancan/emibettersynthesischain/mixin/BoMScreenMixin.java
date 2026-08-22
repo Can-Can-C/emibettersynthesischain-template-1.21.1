@@ -65,10 +65,10 @@ public abstract class BoMScreenMixin {
     }
 
     /** 点击处理：命中缩略条目 → 设为 BoM 目标并重算原版树；否则交回原逻辑。 */
-    @Inject(method = "mouseClicked", at = @At("HEAD"), cancellable = true)
-    private void ebs$clickSidebar(double mouseX, double mouseY, int button,
+    @Inject(method = "mouseClicked(Lnet/minecraft/client/input/MouseButtonEvent;Z)Z", at = @At("HEAD"), cancellable = true)
+    private void ebs$clickSidebar(net.minecraft.client.input.MouseButtonEvent e, boolean screenIsActive,
             CallbackInfoReturnable<Boolean> cir) {
-        int idx = pickSidebarItem(mouseX, mouseY);
+        int idx = pickSidebarItem(e.x(), e.y());
         if (idx >= 0) {
             select(idx);
             cir.setReturnValue(true);
