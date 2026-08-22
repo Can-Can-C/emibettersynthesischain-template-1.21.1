@@ -99,6 +99,15 @@
 - **验收**：8.7（批量/每树数量/Productive Bees/光标）+ 9.4（青绿配色/设置页下拉落盘/括号/S/层级序号/既有设置回归）全部通过；本次 runClient 期间发现并修复"点击 EMI 设置页崩溃"（`TreeColorEnum` 移出 `mixin` 受管控包，见 devlog 2026-08-21 会话 2）。
 - **构建**：`./gradlew build` → BUILD SUCCESSFUL；产物 `build/libs/emibettersynthesischain-2.2.0.jar`（`gradle.properties` `mod_version=2.2.0`）。
 
+## Phase 10 — 修复"AE/背包中存储物读取不准"（v2.2.0 发布后回测，2026-08-22）
+- [x] 10.1 **树缓存刷新检测扩展**：`maybeRefreshOnInventoryChange` 原只哈希玩家背包 36 格 + 菜单类名 → AE 网络内容变化/背包容器内挪动物品检测不到，树标红/可合成判定停留旧快照。修复：每 5 tick 追加①当前容器菜单全部槽位内容哈希；②`Ae2Support.networkSignature()`（ME 终端门禁，网络条目组合哈希）。`./gradlew build` SUCCESS。
+- [x] 10.2 **合并库存扩展到所有 ME 终端**：`mergedInventory` 门禁由 `CraftingTermMenu` 放宽为 `MEStorageMenu`（javap 实证继承关系，覆盖普通存储/合成/无线终端）——普通 ME 终端看树也能识别网络存储。`./gradlew build` SUCCESS。
+- [x] 10.3 **用户 runClient 复测验收通过（2026-08-22）**：AE 普通/合成终端与背包中动存储，树标红/拥有量即时跟上；自动合成前后数量正确。剩余已知误差（AE2 repo 同步滞后数 tick、同种不同 NBT 不合并计数 Q6）记录在案。
+
+## 验收与发布（v2.2.1，2026-08-22 hotfix）
+- **验收**：10.3 "AE/背包中存储物读取不准"修复复测通过（树缓存刷新检测扩展 + 合并库存扩展到所有 ME 终端）。
+- **构建**：`./gradlew build` → BUILD SUCCESSFUL；产物 `build/libs/emibettersynthesischain-2.2.1.jar`（`gradle.properties` `mod_version=2.2.1`）。
+
 ## Phase 7 — v2.1.1 AE2 终端网络拉料（需求 11）
 - [x] 7.1 **实现**：`Ae2Support.mergedInventory`（自建"槽位+网络"合并库存，不依赖 AE2 的 exposeNetworkInventoryToEmi 配置，默认 false 时 handler.getInventory 不含网络）；`CraftInventory.currentScreenInventory/current` AE2 终端优先用合并库存；`ClientCraftChain.fillViaEmi` AE2 分支走 **AE2 原生 handler.craft（transferRecipe）**（服务端从背包+网络取料，替代 clientFill——其 getStacks 依赖 AE2 配置的 getInventory）；树标红 `producersOf` 与链条 `findProducerToCraft` 统一**只用默认配方**（BoM.getRecipe，断了就停）；`hasCraftingMenuOpen` 认可 AE2 合成格（3×3）。`./gradlew build` → BUILD SUCCESSFUL。
 - [x] 7.2 **用户 runClient 验收通过**：AE2 终端、背包无料仅网络有料 → V 自动合成成功（材料直接网络进合成格→合成→取产物）；树按默认配方识别（默认链断即红）；中间层按默认配方链合成；Shift+V 连续；AE2 未装环境不受影响。**（✅ 已验收 2026-08-15）**

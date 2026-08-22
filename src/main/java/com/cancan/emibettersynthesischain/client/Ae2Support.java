@@ -46,6 +46,41 @@ public final class Ae2Support {
         return ModList.get().isLoaded("ae2");
     }
 
+    /**
+     * AE 网络存储的轻量签名（供树缓存刷新检测）。
+     *
+     * <p>{@code InternalHelperImpl.maybeRefreshOnInventoryChange} 只用玩家背包 36 格哈希判断
+     * "库存变了要重建树"——**网络存储变化（且玩家背包没动）检测不到**，树标红/可合成判定会
+     * 停留在旧快照（"AE 里存储物读取不准"根因之一）。本方法对网络条目（what + amount）做
+     * 组合哈希，ME 终端（含合成终端）打开时每 5 tick 参与刷新判定；非 ME 终端返回 0（不干扰）。</p>
+     *
+     * @return 网络签名；AE2 未装 / 非 ME 终端 / 异常 → 0
+     */
+    public static long networkSignature() {
+        if (!isLoaded()) {
+            return 0;
+        }
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null || !(mc.player.containerMenu instanceof appeng.menu.me.common.MEStorageMenu menu)) {
+            return 0;
+        }
+        try {
+            appeng.menu.me.common.IClientRepo repo =
+                    ((appeng.menu.me.common.MEStorageMenu) menu).getClientRepo();
+            if (repo == null) {
+                return 0;
+            }
+            long h = 0;
+            for (appeng.menu.me.common.GridInventoryEntry e : repo.getAllEntries()) {
+                // getWhat() = GenericStack（what + amount 参与 hashCode → 数量/种类变化都会反映）
+                h = h * 31 + e.getWhat().hashCode();
+            }
+            return h;
+        } catch (Exception t) {
+            return 0;
+        }
+    }
+
     /** 当前菜单是否为 AE2 合成终端（含无线合成终端，其继承 CraftingTermMenu）。 */
     public static boolean isCraftingTermMenu(AbstractContainerMenu menu) {
         if (!isLoaded() || menu == null) {
@@ -131,7 +166,7 @@ public final class Ae2Support {
      * 与 AE2 原 getInventory 的 default 实现一致）；网络部分用 AE2 自己的
      * {@code EmiStackHelper.toEmiStack(GenericStack)} 转换（组件保真、数量无 64 上限）。</p>
      *
-     * @param screen 当前容器界面（须为 AE2 合成终端，否则返回 null 由调用方回退）
+     * @param screen 当前容器界面（须为 AE2 ME 终端——普通存储/合成终端等，否则返回 null 由调用方回退）
      * @return 合并库存；非 AE2 终端 / 构建失败 → null
      */
     @SuppressWarnings({"rawtypes", "unchecked"})
@@ -144,7 +179,9 @@ public final class Ae2Support {
             return null;
         }
         AbstractContainerMenu menu = screen.getMenu();
-        if (!(menu instanceof appeng.menu.me.items.CraftingTermMenu)) {
+        // 所有 ME 终端（普通存储终端 / 合成终端 / 无线等，CraftingTermMenu extends MEStorageMenu）：
+        // 树/预检都能看到网络存储；非 ME 终端返回 null 由调用方回退原逻辑
+        if (!(menu instanceof appeng.menu.me.common.MEStorageMenu)) {
             return null;
         }
         try {

@@ -32,7 +32,9 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.CraftingMenu;
+import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.CraftingRecipe;
 import net.minecraft.world.item.crafting.RecipeHolder;
@@ -247,7 +249,10 @@ public class InternalHelperImpl implements IEmiInternal {
         }
     }
 
-    /** 玩家背包变化（或打开/关闭工作台等换菜单）时刷新树缓存（标红"能否获得"用最新状态）。 */
+    /** 玩家背包变化（或打开/关闭工作台等换菜单）时刷新树缓存（标红"能否获得"用最新状态）。
+     *  <p>除玩家背包 36 格外，还会检测：当前容器菜单**槽位内容**（背包等容器内挪动/存取）与
+     *  **AE 网络存储**（AE 合成终端，走 {@link Ae2Support#networkSignature}）——否则只在 AE/背包
+     *  里动存储、玩家背包没变时，树标红/可合成判定停留在旧快照（"存储物读取不准"根因）。</p> */
     private void maybeRefreshOnInventoryChange() {
         try {
             Player player = Minecraft.getInstance().player;
@@ -265,6 +270,19 @@ public class InternalHelperImpl implements IEmiInternal {
                         hash = hash * 31 + s.getCount();
                     }
                 }
+                // 当前容器菜单的槽位内容（背包本体等）：容器内挪动/存取物品、合成格变化也触发刷新
+                AbstractContainerMenu menu = player.containerMenu;
+                if (menu != null) {
+                    for (Slot slot : menu.slots) {
+                        ItemStack s = slot.getItem();
+                        if (!s.isEmpty()) {
+                            hash = hash * 31 + ItemStack.hashItemAndComponents(s);
+                            hash = hash * 31 + s.getCount();
+                        }
+                    }
+                }
+                // AE 网络存储（仅合成终端，非 AE 返回 0）：网络条目增减/数量变化触发刷新
+                hash = hash * 31 + Long.hashCode(Ae2Support.networkSignature());
             }
             // 3×3 标红依赖"是否打开工作台界面"，菜单切换也触发刷新
             hash = hash * 31 + (player.containerMenu == null ? 0
