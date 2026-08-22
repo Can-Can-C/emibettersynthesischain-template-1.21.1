@@ -1,0 +1,28 @@
+{
+  "mappings": {
+    "com/cancan/emibettersynthesischain/mixin/AbstractContainerScreenMixin": {
+      "render": "Lnet/minecraft/client/gui/screens/inventory/AbstractContainerScreen;m_88315_(Lnet/minecraft/client/gui/GuiGraphics;IIF)V"
+    },
+    "com/cancan/emibettersynthesischain/mixin/BoMScreenMixin": {
+      "render": "Ldev/emi/emi/screen/BoMScreen;m_88315_(Lnet/minecraft/client/gui/GuiGraphics;IIF)V",
+      "mouseClicked": "Ldev/emi/emi/screen/BoMScreen;m_6375_(DDI)Z"
+    },
+    "com/cancan/emibettersynthesischain/mixin/ConfigScreenMixin": {
+      "init": "Ldev/emi/emi/screen/ConfigScreen;m_7856_()V"
+    }
+  },
+  "data": {
+    "searge": {
+      "com/cancan/emibettersynthesischain/mixin/AbstractContainerScreenMixin": {
+        "render": "Lnet/minecraft/client/gui/screens/inventory/AbstractContainerScreen;m_88315_(Lnet/minecraft/client/gui/GuiGraphics;IIF)V"
+      },
+      "com/cancan/emibettersynthesischain/mixin/BoMScreenMixin": {
+        "render": "Ldev/emi/emi/screen/BoMScreen;m_88315_(Lnet/minecraft/client/gui/GuiGraphics;IIF)V",
+        "mouseClicked": "Ldev/emi/emi/screen/BoMScreen;m_6375_(DDI)Z"
+      },
+      "com/cancan/emibettersynthesischain/mixin/ConfigScreenMixin": {
+        "init": "Ldev/emi/emi/screen/ConfigScreen;m_7856_()V"
+      }
+    }
+  }
+}

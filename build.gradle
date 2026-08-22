@@ -22,6 +22,10 @@ minecraft {
             workingDirectory project.file('run')
             property 'forge.logging.markers', 'REGISTRIES'
             property 'forge.logging.console.level', 'debug'
+            // dev 运行时把 refmap 里 SRG 目标名映射回官方名（见 emibettersynthesischain.refmap.json，
+            // 覆盖 BoMScreen.render/mouseClicked、ConfigScreen.init、AbstractContainerScreen.render 四个 vanilla 覆写点）
+            property 'mixin.env.remapRefMap', 'true'
+            property 'mixin.env.refMapRemappingFile', "${projectDir}/build/createSrgToMcp/output.srg"
             mods { "${mod_id}" { source sourceSets.main } }
         }
         server {

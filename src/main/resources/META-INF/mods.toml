@@ -20,7 +20,7 @@ config="emibettersynthesischain.mixins.json"
 # Forge loader
 [[dependencies.emibettersynthesischain]]
 modId="forge"
-type="required"
+mandatory=true
 versionRange="[40,)"
 ordering="NONE"
 side="BOTH"
@@ -28,7 +28,7 @@ side="BOTH"
 # Minecraft
 [[dependencies.emibettersynthesischain]]
 modId="minecraft"
-type="required"
+mandatory=true
 versionRange="[1.20.1]"
 ordering="NONE"
 side="BOTH"
@@ -36,7 +36,7 @@ side="BOTH"
 # EMI (client dependency)
 [[dependencies.emibettersynthesischain]]
 modId="emi"
-type="required"
+mandatory=true
 versionRange="[1.1.0,)"
 ordering="AFTER"
 side="CLIENT"
