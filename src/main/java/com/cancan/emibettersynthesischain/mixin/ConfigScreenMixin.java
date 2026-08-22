@@ -19,7 +19,6 @@ import dev.emi.emi.screen.widget.config.GroupNameWidget;
 import dev.emi.emi.screen.widget.config.IntWidget;
 import dev.emi.emi.screen.widget.config.ListWidget;
 import dev.emi.emi.screen.widget.config.SubGroupNameWidget;
-import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraftforge.common.ForgeConfigSpec;
@@ -28,7 +27,6 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
@@ -44,6 +42,9 @@ public abstract class ConfigScreenMixin extends Screen {
     private ConfigSearch search;
 
     @Shadow
+    public ListWidget list;
+
+    @Shadow
     public abstract void jump(String jump);
 
     protected ConfigScreenMixin(Component title) {
@@ -53,13 +54,13 @@ public abstract class ConfigScreenMixin extends Screen {
     @Unique
     private static final String GROUP_ID = "ebs";
 
-    @ModifyArg(method = "init", at = @At(value = "INVOKE",
-            target = "Ldev/emi/emi/screen/ConfigScreen;addWidget(Lnet/minecraft/client/gui/components/events/GuiEventListener;)Lnet/minecraft/client/gui/components/events/GuiEventListener;"))
-    private GuiEventListener onAddWidget(GuiEventListener widget) {
-        if (widget instanceof ListWidget list) {
-            attachConfig(list);
+    @Inject(method = "init", at = @At(value = "TAIL"))
+    private void ebs$onInit(CallbackInfo ci) {
+        // 生产 jar：EMI 自有字段保留原名（javap 实证 list 为 public），@Shadow 直接命中；
+        // 不引 vanilla addWidget 调用点，避免 SRG 生产环境下 @At(INVOKE) 重映射失败。
+        if (this.list != null) {
+            attachConfig(this.list);
         }
-        return widget;
     }
 
     @Unique

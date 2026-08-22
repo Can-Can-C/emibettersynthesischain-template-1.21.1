@@ -9,7 +9,10 @@
     },
     "com/cancan/emibettersynthesischain/mixin/ConfigScreenMixin": {
       "init": "Ldev/emi/emi/screen/ConfigScreen;m_7856_()V",
+      "addWidget": "Ldev/emi/emi/screen/ConfigScreen;m_7787_(Lnet/minecraft/client/gui/components/events/GuiEventListener;)Lnet/minecraft/client/gui/components/events/GuiEventListener;",
+      "addWidget(Lnet/minecraft/client/gui/components/events/GuiEventListener;)": "Ldev/emi/emi/screen/ConfigScreen;m_7787_(Lnet/minecraft/client/gui/components/events/GuiEventListener;)Lnet/minecraft/client/gui/components/events/GuiEventListener;",
       "addWidget(Lnet/minecraft/client/gui/components/events/GuiEventListener;)Lnet/minecraft/client/gui/components/events/GuiEventListener;": "Ldev/emi/emi/screen/ConfigScreen;m_7787_(Lnet/minecraft/client/gui/components/events/GuiEventListener;)Lnet/minecraft/client/gui/components/events/GuiEventListener;",
+      "dev/emi/emi/screen/ConfigScreen.addWidget": "Ldev/emi/emi/screen/ConfigScreen;m_7787_(Lnet/minecraft/client/gui/components/events/GuiEventListener;)Lnet/minecraft/client/gui/components/events/GuiEventListener;",
       "dev/emi/emi/screen/ConfigScreen.addWidget(Lnet/minecraft/client/gui/components/events/GuiEventListener;)Lnet/minecraft/client/gui/components/events/GuiEventListener;": "Ldev/emi/emi/screen/ConfigScreen;m_7787_(Lnet/minecraft/client/gui/components/events/GuiEventListener;)Lnet/minecraft/client/gui/components/events/GuiEventListener;"
     }
   },
@@ -24,7 +27,10 @@
       },
       "com/cancan/emibettersynthesischain/mixin/ConfigScreenMixin": {
         "init": "Ldev/emi/emi/screen/ConfigScreen;m_7856_()V",
+        "addWidget": "Ldev/emi/emi/screen/ConfigScreen;m_7787_(Lnet/minecraft/client/gui/components/events/GuiEventListener;)Lnet/minecraft/client/gui/components/events/GuiEventListener;",
+        "addWidget(Lnet/minecraft/client/gui/components/events/GuiEventListener;)": "Ldev/emi/emi/screen/ConfigScreen;m_7787_(Lnet/minecraft/client/gui/components/events/GuiEventListener;)Lnet/minecraft/client/gui/components/events/GuiEventListener;",
         "addWidget(Lnet/minecraft/client/gui/components/events/GuiEventListener;)Lnet/minecraft/client/gui/components/events/GuiEventListener;": "Ldev/emi/emi/screen/ConfigScreen;m_7787_(Lnet/minecraft/client/gui/components/events/GuiEventListener;)Lnet/minecraft/client/gui/components/events/GuiEventListener;",
+        "dev/emi/emi/screen/ConfigScreen.addWidget": "Ldev/emi/emi/screen/ConfigScreen;m_7787_(Lnet/minecraft/client/gui/components/events/GuiEventListener;)Lnet/minecraft/client/gui/components/events/GuiEventListener;",
         "dev/emi/emi/screen/ConfigScreen.addWidget(Lnet/minecraft/client/gui/components/events/GuiEventListener;)Lnet/minecraft/client/gui/components/events/GuiEventListener;": "Ldev/emi/emi/screen/ConfigScreen;m_7787_(Lnet/minecraft/client/gui/components/events/GuiEventListener;)Lnet/minecraft/client/gui/components/events/GuiEventListener;"
       }
     }
