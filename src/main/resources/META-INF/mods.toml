@@ -1,0 +1,42 @@
+# EMI Better Synthesis Chain - Forge 1.20.1 branch (hardcoded values, no template expansion).
+
+modLoader="javafml" #mandatory
+loaderVersion="[40,)" #mandatory
+
+license="MIT"
+
+[[mods]] #mandatory
+modId="emibettersynthesischain" #mandatory
+version="2.2.1" #mandatory
+displayName="EMI Better Synthesis Chain" #mandatory
+authors="Can-Can-C"
+description='''
+EMI Better Synthesis Chain - Forge 1.20.1 / EMI 1.1.24 addon: rewritten EMI recipe-tree view + hover-to-auto-craft.
+'''
+
+[[mixins]]
+config="emibettersynthesischain.mixins.json"
+
+# Forge loader
+[[dependencies.emibettersynthesischain]]
+modId="forge"
+type="required"
+versionRange="[40,)"
+ordering="NONE"
+side="BOTH"
+
+# Minecraft
+[[dependencies.emibettersynthesischain]]
+modId="minecraft"
+type="required"
+versionRange="[1.20.1]"
+ordering="NONE"
+side="BOTH"
+
+# EMI (client dependency)
+[[dependencies.emibettersynthesischain]]
+modId="emi"
+type="required"
+versionRange="[1.1.0,)"
+ordering="AFTER"
+side="CLIENT"

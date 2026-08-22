@@ -1,6 +1,10 @@
 pluginManagement {
     repositories {
         gradlePluginPortal()
+        // ForgeGradle 发布在 Forge 自己的 maven 上（不在插件门户）
+        maven {
+            url = 'https://maven.minecraftforge.net/'
+        }
     }
 }
 

@@ -1,35 +1,27 @@
 package com.cancan.emibettersynthesischain;
 
+import com.mojang.logging.LogUtils;
+import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
+import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import org.slf4j.Logger;
 
-import com.mojang.logging.LogUtils;
-
-import net.neoforged.bus.api.IEventBus;
-import net.neoforged.fml.ModContainer;
-import net.neoforged.fml.common.Mod;
-import net.neoforged.fml.config.ModConfig;
-import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
-
-// The value here should match an entry in the META-INF/neoforge.mods.toml file
+/**
+ * EMI Better Synthesis Chain — Forge 1.20.1 分支（多版本移植骨架）。
+ *
+ * <p>当前为 Phase 11.1 空骨架：仅注册 mod + 客户端启动钩子。移植阶段（11.2+）把主线的
+ * 合成树 / 自动合成 / 配置 UI / 联动代码按模块搬回本分支并适配 Forge 1.20.1 API。</p>
+ */
 @Mod(EMIBettersynthesischain.MODID)
 public class EMIBettersynthesischain {
-    // Define mod id in a common place for everything to reference
     public static final String MODID = "emibettersynthesischain";
-    // Directly reference a slf4j logger
     public static final Logger LOGGER = LogUtils.getLogger();
 
-    // The constructor for the mod class is the first code that is run when your mod is loaded.
-    // FML will recognize some parameter types like IEventBus or ModContainer and pass them in automatically.
-    public EMIBettersynthesischain(IEventBus modEventBus, ModContainer modContainer) {
-        // Register the commonSetup method for modloading
-        modEventBus.addListener(this::commonSetup);
-
-        // Register our mod's ModConfigSpec so that FML can create and load the config file for us
-        modContainer.registerConfig(ModConfig.Type.COMMON, Config.SPEC);
+    public EMIBettersynthesischain() {
+        FMLJavaModLoadingContext.get().getModEventBus().addListener(this::clientSetup);
     }
 
-    private void commonSetup(FMLCommonSetupEvent event) {
-        // Some common setup code
-        LOGGER.info("EMI Better Synthesis Chain loaded");
+    private void clientSetup(final FMLClientSetupEvent event) {
+        LOGGER.info("[EBS] Forge 1.20.1 skeleton loaded");
     }
 }
