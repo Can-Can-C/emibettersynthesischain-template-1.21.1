@@ -116,9 +116,9 @@
 - [x] 11.2 **核心移植（本分支包含全量模块：合成树/自动合成/配置 UI/联动占位）**：`./gradlew build` BUILD SUCCESSFUL。
   - **26.1.2 关键 API 差异（javap 实证，详见 devlog）**：`ResourceLocation`→`Identifier`；`GuiGraphics`→`GuiGraphicsExtractor`、`Screen.render`→`extractRenderState`；`drawString`→`text`、`renderTooltip`→`setTooltipForNextFrame`；pose 改 JOML `Matrix3x2fStack`（2D，无 z）；`ClickType`→`ContainerInput`+`handleContainerInput`；`KeyMapping(String,int,Category(Identifier))`；`Screen.hasControlDown/ShiftDown` 移除→GLFW；`RecipeBookMenu` grid getter 移除；`TagParser.parseCompoundFully`；`BuiltInRegistries.ITEM.get`→Optional；ItemStack 持久化走 CODEC（RegistryOps+NbtOps）；`Inventory.items` private。
 - [x] 11.3 **自动合成（26.1.2，随核心移植一道编译）**：AutoCraftClient / ClientCraftChain / CraftInventory / MessageOverlay + 快捷键 —— 已在 11.2 全量源码中编译通过（同一批差异清单适配）。
-- [x] 11.3b **26.1.2 冒烟启动通过（2026-08-22）**：启动到标题界面、全部 mixin 注入生效（`bo: tainted` 日志确认 EmiApi/ConfigScreen/BoMScreen/BoM）、keybind/client-ready 日志正常、无崩溃；`mouseClicked(MouseButtonEvent,Z)`/`mouseScrolled(DDDD)` 输入 API 修复后无 Invalid descriptor。
-- [ ] 11.2d **26.1.2 功能验收（用户 runClient）**：树显示/括号/S/序号/配色、自动合成（无 AE2 环境）、设置页（含配色下拉）。
-- [ ] 11.4 **配置与 UI**：Config / ConfigScreenMixin（含配色 EnumWidget）/ ConfigResetButton / lang。
+- [x] 11.3b **26.1.2 冒烟启动通过（2026-08-22）**：启动到标题界面、全部 mixin 注入生效（`bo: tainted` 日志确认 EmiApi/ConfigScreen/BoMScreen/BoM）、keybind/client-ready 日志正常、无崩溃；`mouseClicked(MouseButtonEvent,Z)` / `mouseScrolled(DDD)Z`（修正误读为 4 参）输入 API 修复后无 Invalid descriptor；**合成提示修复**：`AbstractRecipeBookScreen.extractRenderState` 不调父类（InventoryScreen 路径）→ mixin 同时注入 AbstractContainerScreen + AbstractRecipeBookScreen。
+- [x] 11.2d **26.1.2 功能验收通过（2026-08-22 用户 runClient）**：树显示（青绿线条/括号/S/层级序号/配色预设）正常；EMI 设置页"EMI Better Synthesis Chain"分组两个配色下拉正常；Shift+V 连续、Ctrl+V 强制、±/滚轮调数量正常；自动合成完整链条（含中间材料+批量）正常。**（✅ 已验收 2026-08-22）**
+- [x] 11.4 **配置与 UI（26.1.2）**：Config / ConfigScreenMixin（含配色 EnumWidget）/ ConfigResetButton / lang —— 随核心移植编译并通过验收（设置页实测）。
 - [ ] 11.5 **联动移植**：Ae2Support（分支 AE2 jar 门禁 + 发包路径）、Productive Bees、批量/每树数量。
 - [ ] 11.6 **验收发布**：两分支 runClient 全量验收（对照主线 2.2.1），文档同步，分支独立版本发布并上传。
 
