@@ -112,8 +112,8 @@
 - 策略见 `docs/05-MULTI_VERSION.md`；分支：`1.20.1-forge` / `26.1.2-neoforge`（同仓多分支，main 主线保留）。
 - [ ] 11.1 **分支与空骨架**：两分支构建工具链跑绿（`./gradlew build` 出空 mod jar；1.20.1 用 ForgeGradle 6 + Gradle 8.x wrapper；26.1.2 用兼容的 NeoGradle/moddev 版本）。
 - [x] 11.2 **核心移植（1.20.1-forge，编译通过）**：全量源码（合成树/自动合成/配置 UI/联动占位）在 Forge 1.20.1 编译通过，`./gradlew build` BUILD SUCCESSFUL。关键适配：`ForgeConfigSpec`、`StackCompat`（哈希/同物比较 → item+NBT 等价）、`getBackingRecipe()` 返回 `Recipe<?>`（无 RecipeHolder）、Forge 事件总线（`InputEvent.Key`/`TickEvent.ClientTickEvent`/`RegisterKeyMappingsEvent`/`ScreenEvent.Opening/Closing`）、javac17 对 forRemoval 报错 → `-Xlint:-removal`、TreeManager 持久化（`ItemStack.of(CompoundTag)` 可空 / `save(new CompoundTag())`）、AE2/PB 占位 stub（等 11.5 jar）。构建要点：EMI jar 必须 `fg.deobf`；不用 mixin 注解处理器+refmap——注意 **BoMScreen.render/mouseClicked、EmiScreenManager.mouseScrolled、ConfigScreen.init 四个 vanilla 覆写注入点在发行包（SRG m_xxx）不生效**（dev runClient 无影响），**11.6 发布前需最小手写 refmap**（m_88315_/m_7933_/m_6050_/m_7856_）。
-- [ ] 11.2b **1.20.1 runClient 验收**：树显示/括号/S/序号/配色、自动合成（含无 AE2 环境）、设置页（含配色下拉）。
-- [ ] 11.2c **26.1.2-neoforge 核心移植**（复用同一批差异清单，另适配 26.1.2 API）。
+- [x] 11.2b **1.20.1 真机验收通过（2026-08-22 用户 PCL/Prism 实例）**：树显示/括号/S/序号/配色、自动合成、设置页（含配色下拉）验收基本通过。生产化修复链（贯穿 11.2b）：mixinextras 依赖改可选（整合包 jarjar 内置导致薄壳被跳过）→ ConfigScreenMixin @At(INVOKE addWidget) 生产 SRG 不生效 → **改 @Shadow public ListWidget list + init TAIL 钩子**（javap+EMI 源码实证字段原名保留），彻底去掉 vanilla 方法名引用；手写 refmap（m_88315_/m_6375_/m_7856_）。
+- [x] 11.2c **26.1.2-neoforge 核心移植**（复用同一批差异清单，另适配 26.1.2 API）。
 - [ ] 11.3 **自动合成**：AutoCraftClient / ClientCraftChain / CraftInventory / MessageOverlay + 快捷键（纯客户端 vanilla 点击包，两版本同一机制）。
 - [ ] 11.4 **配置与 UI**：Config / ConfigScreenMixin（含配色 EnumWidget）/ ConfigResetButton / lang。
 - [ ] 11.5 **联动移植**：Ae2Support（分支 AE2 jar 门禁 + 发包路径）、Productive Bees、批量/每树数量。
