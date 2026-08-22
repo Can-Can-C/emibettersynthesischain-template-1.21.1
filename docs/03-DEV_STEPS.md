@@ -110,7 +110,9 @@
 
 ## Phase 11 — 多版本开发（需求 15，2026-08-22 启动）
 - 策略见 `docs/05-MULTI_VERSION.md`；分支：`1.20.1-forge` / `26.1.2-neoforge`（同仓多分支，main 主线保留）。
-- [ ] 11.1 **分支与空骨架**：两分支构建工具链跑绿（`./gradlew build` 出空 mod jar；1.20.1 用 ForgeGradle 6 + Gradle 8.x wrapper；26.1.2 用兼容的 NeoGradle/moddev 版本）。
+- [x] 11.1 **分支与空骨架**：✅ 双分支 `./gradlew build` 均 BUILD SUCCESSFUL——
+  - `1.20.1-forge`：ForgeGradle 6 + **Gradle 8.7（JDK 17；FG6 不兼容 Gradle 9）** + Forge `1.20.1-47.4.5` + 官方 EMI 1.20.1 jar；mods.toml 硬编码（expand 模板解析中文/全角字符会失败）；`[40,)` loader。
+  - `26.1.2-neoforge`：moddev **2.0.144** + NeoForge `26.1.2.97`（maven.neoforged.net 时通时断，需重试容忍）+ Gradle 9.2.1 + 非官方 EMI jar；`@Mod` 包路径未变；toolchain JDK 25。
 - [ ] 11.2 **核心移植**：合成树数据/渲染/交互（mixins 注入点逐 jar javap 核对；`hashItemAndComponents`/`isSameItemSameComponents` 等 MC 差异适配；Forge 版换 `ForgeConfigSpec`/`ModList`/`PacketDistributor` 路径）。runClient 验收树展示。
 - [ ] 11.3 **自动合成**：AutoCraftClient / ClientCraftChain / CraftInventory / MessageOverlay + 快捷键（纯客户端 vanilla 点击包，两版本同一机制）。
 - [ ] 11.4 **配置与 UI**：Config / ConfigScreenMixin（含配色 EnumWidget）/ ConfigResetButton / lang。
