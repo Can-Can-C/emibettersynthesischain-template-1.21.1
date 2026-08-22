@@ -45,7 +45,7 @@ authors="Can-Can-C"
 
 # The description text for the mod (multi line!) (#mandatory)
 description='''
-EMI Better Synthesis Chain —— NeoForge 1.21.1 / EMI 1.1.24 的 EMI 附属 mod：重写 EMI 配方树展示 + 悬停即自动合成。
+EMI Better Synthesis Chain —— NeoForge 26.1.2 / EMI 1.1.24（非官方重建）的 EMI 附属 mod：重写 EMI 配方树展示 + 悬停即自动合成。
 
 功能：
 - 配方树按钮 → 在收藏页内显示合成树（不再弹独立 BoM 界面）；添加配方不关页面
@@ -53,7 +53,7 @@ EMI Better Synthesis Chain —— NeoForge 1.21.1 / EMI 1.1.24 的 EMI 附属 mo
 - 多物品合成树：标签点选具体成员、组件感知（不同 NBT 各自成树）、重启持久化、流体用量显示
 - 自动合成：V=一次（得最终结果即停）/ Shift+V=连续；完整链条递归（缺什么先合什么，含标签成员）；
   模拟玩家合成（材料在合成格逐步显示，余料/容器如桶返还背包）；默认配方优先；3×3 需打开工作台界面
-- EMI 设置页可调：树行高/间距/标红、自动合成速度/失败提示
+- 线条配色预设可配 + 树侧括号 + 层级序号 + 总材料 S 标记；EMI 设置页可调全套树/合成参数
 '''
 
 # The [[mixins]] block allows you to declare your mixin config to FML so that it gets loaded.
