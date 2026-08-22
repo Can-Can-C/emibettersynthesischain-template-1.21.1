@@ -40,9 +40,8 @@ minecraft {
     }
 }
 
-// Mixin：加 refmap、注册 config（骨架期 client 列表为空，移植阶段逐个加入）
+// Mixin：注册 config（所有目标都是 EMI 类，无需 refmap —— 见下）
 mixin {
-    add sourceSets.main, "${mod_id}.refmap.json"
     config "${mod_id}.mixins.json"
 }
 
@@ -59,20 +58,30 @@ repositories {
     maven {
         url 'https://repo.spongepowered.org/maven'
     }
+    // MixinExtras（ConfigScreenMixin 的 @Local）
+    mavenCentral()
 }
 
 dependencies {
     minecraft "net.minecraftforge:forge:${forge_version}"
 
+    // MixinExtras（@Local 等 MixinExtras 语法；ConfigScreenMixin 的 onAddJumpButtons @Local 需要）
+    // forge 壳是 jarjar 薄壳（真类在嵌套 jar），编译用 common 模块
+    implementation fg.deobf("io.github.llamalad7:mixinextras-common:0.3.6")
+    implementation fg.deobf("io.github.llamalad7:mixinextras-forge:0.3.6")
+
     // EMI（1.20.1 Forge 官方构建）：compileOnly 编进 classpath（含我们 Mixin 的内部类），
     // runtimeOnly 供 runClient 开发环境加载；不打进 mod 包、不发布。
-    def emiJar = files("libs/emi-1.1.24+1.20.1+forge.1.jar")
+    // fg.deobf：Forge 开发环境用 MCP 官方名，mod jar 是 SRG 名 → 必须经 FG 重映射器
+    // （否则源里调 EMI 方法找不到符号、mixin AP 报 "Unable to locate obfuscation mapping"）。
+    def emiJar = fg.deobf(files("libs/emi-1.1.24+1.20.1+forge.1.jar"))
     compileOnly emiJar
     runtimeOnly emiJar
-
-    // Mixin 注解处理器
-    annotationProcessor "org.spongepowered:mixin:0.8.5:processor"
 }
+
+// 不用 mixin 注解处理器（org.spongepowered.mixin:processor）：所有注入目标都是 EMI 类，
+// 生产环境方法名不变 → 不需要 refmap；AP 反而会对无映射的 mod 类目标报
+// "Unable to locate obfuscation mapping" 编译错误。运行时 Mixin 按普通类名注入即可。
 
 processResources {
     // 1.20.1 mods.toml 用硬编码值（见 src/main/resources/META-INF/mods.toml）：
@@ -93,4 +102,13 @@ jar {
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
+    // javac 17 把 @Deprecated(forRemoval) 当"错误"诊断（如 Forge 1.20.1 的
+    // ModLoadingContext.get()/FMLJavaModLoadingContext.get() 仍是最标准用法）：
+    // 关闭 removal/deprecation lint，恢复警告级/静默。
+    options.compilerArgs.add '-Xlint:-removal'
+    options.compilerArgs.add '-Xlint:-deprecation'
+    // 所有 mixin 目标都是 EMI（mod 类，非 vanilla）→ 无 SRG 映射可查，
+    // 关掉 refmap 生成/映射可避免 "Unable to locate obfuscation mapping" 编译错误
+    // （运行时这些 mixin 目标是普通类名，不需要 refmap）。
+    options.compilerArgs.add '-Amixin.env.disableRefMap=true'
 }
