@@ -123,6 +123,14 @@
 - [x] 7.1 **实现**：`Ae2Support.mergedInventory`（自建"槽位+网络"合并库存，不依赖 AE2 的 exposeNetworkInventoryToEmi 配置，默认 false 时 handler.getInventory 不含网络）；`CraftInventory.currentScreenInventory/current` AE2 终端优先用合并库存；`ClientCraftChain.fillViaEmi` AE2 分支走 **AE2 原生 handler.craft（transferRecipe）**（服务端从背包+网络取料，替代 clientFill——其 getStacks 依赖 AE2 配置的 getInventory）；树标红 `producersOf` 与链条 `findProducerToCraft` 统一**只用默认配方**（BoM.getRecipe，断了就停）；`hasCraftingMenuOpen` 认可 AE2 合成格（3×3）。`./gradlew build` → BUILD SUCCESSFUL。
 - [x] 7.2 **用户 runClient 验收通过**：AE2 终端、背包无料仅网络有料 → V 自动合成成功（材料直接网络进合成格→合成→取产物）；树按默认配方识别（默认链断即红）；中间层按默认配方链合成；Shift+V 连续；AE2 未装环境不受影响。**（✅ 已验收 2026-08-15）**
 
+## Phase 12 — 显示能力不失败 + 未知节点语义（需求 16，2026-08-22 立项）
+- 需求见 docs/01 需求 16；设计见 docs/02 5.1b。策略同 Phase 11：先 1.20.1-forge，再 26.1.2-neoforge 与 main。
+- [x] 12.1 **文档立项**：docs/01（需求 16 + 变更记录）、docs/02（5.1b：resolveState 三态、宽松构建、叶子语义、PB 优先级、自动合成交界）、本清单。
+- [ ] 12.2 **1.20.1-forge 实现**：InternalHelperImpl 宽松构建（LEAF_KNOWN/LEAF_UNKNOWABLE + S 照常计数）；TreeRenderer（虚拟栈图标/中立项/无库存标注/tooltip）；ClientCraftChain/AutoCraftClient（遇 LEAF 停链 + 明确提示）。
+- [ ] 12.3 **构建自验**：`./gradlew build` BUILD SUCCESSFUL；运行期冒烟（能添加三类"以前失败"的配方）。
+- [ ] 12.4 **26.1.2-neoforge / main 同步**（同批差异清单）。
+- [ ] 12.5 **用户验收**：三类配方可添加/显示/S 完整/状态中立；自动合成未知叶子按策略提示；既有路径回归不变。
+
 ## 通用流程（每次会话）
 1. 读 `devlog/` 当日日志 + 本文件定位阶段。
 2. 按 `docs/02-TECHNICAL_DESIGN.md` 实现。
