@@ -33,13 +33,14 @@ versionRange="[1.20.1]"
 ordering="NONE"
 side="BOTH"
 
-# MixinExtras (ConfigScreenMixin @Local 运行时依赖；EMI 1.20.1 官方 jar 不携带，需同装)
+# MixinExtras（ConfigScreenMixin @Local 运行时依赖；EMI 1.20.1 官方 jar 不携带）
+# 说明：不要声明强制依赖——整合包常以 jarjar/内置形式提供其类（如 Redirector），
+# 独立薄壳 jar 会被 FML JarSelector 跳过而"未注册"，强制依赖会误判缺失。
+# 运行时只要类在 classpath（内置或放 mixinextras-forge 薄壳 jar）即可工作。
 [[dependencies.emibettersynthesischain]]
 modId="mixinextras"
-mandatory=true
-versionRange="[0.3.0,)"
-ordering="AFTER"
-side="CLIENT"
+mandatory=false
+versionRange="[0.0.0,)"
 
 # EMI (client dependency)
 [[dependencies.emibettersynthesischain]]
