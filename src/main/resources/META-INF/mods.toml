@@ -33,6 +33,14 @@ versionRange="[1.20.1]"
 ordering="NONE"
 side="BOTH"
 
+# MixinExtras (ConfigScreenMixin @Local 运行时依赖；EMI 1.20.1 官方 jar 不携带，需同装)
+[[dependencies.emibettersynthesischain]]
+modId="mixinextras"
+mandatory=true
+versionRange="[0.3.0,)"
+ordering="AFTER"
+side="CLIENT"
+
 # EMI (client dependency)
 [[dependencies.emibettersynthesischain]]
 modId="emi"
