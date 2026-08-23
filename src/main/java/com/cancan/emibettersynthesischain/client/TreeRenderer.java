@@ -90,7 +90,11 @@ public final class TreeRenderer {
     private enum Kind { GOAL, MATERIAL, BYPRODUCT }
 
     private record Placed(int treeIndex, int x, int y, EmiIngredient content, Kind kind, boolean canCraft,
-            EmiIngredient resolvedTo, EmiRecipe producer) {
+            EmiIngredient resolvedTo, EmiRecipe producer, TreeData.ResolveState state) {
+        /** 需求 16：未知（不可计数）叶子——仅显示，不参与拥有量/标红/自动合成。 */
+        boolean unknown() {
+            return state == TreeData.ResolveState.LEAF_UNKNOWABLE;
+        }
     }
 
     private TreeRenderer() {
@@ -149,14 +153,14 @@ public final class TreeRenderer {
             if (p.y() > py + ph) {
                 continue;
             }
-            // 悬停树时：材料不足的节点叠红色（可在 EMI 设置页关闭）
-            if (Config.TREE_RED_MARKING.get() && hoverOnTree && !p.canCraft()) {
+            // 悬停树时：材料不足的节点叠红色（可在 EMI 设置页关闭）；未知节点不标红（需求 16 中立项）
+            if (Config.TREE_RED_MARKING.get() && hoverOnTree && !p.canCraft() && !p.unknown()) {
                 g.fill(p.x(), p.y(), p.x() + ICON, p.y() + ICON, 0x55FF3030);
             }
             if (p == hovered) {
-                // 悬停：材料不足 → 红；可合成 → 白
-                g.fill(p.x() - 1, p.y() - 1, p.x() + ICON + 1, p.y() + ICON + 1,
-                        p.canCraft() ? 0x55FFFFFF : 0x66FF4040);
+                // 悬停：材料不足 → 红；可合成 → 白；未知 → 灰（需求 16）
+                int hl = p.unknown() ? 0x66AAAAAA : (p.canCraft() ? 0x55FFFFFF : 0x66FF4040);
+                g.fill(p.x() - 1, p.y() - 1, p.x() + ICON + 1, p.y() + ICON + 1, hl);
             } else if (p.kind() == Kind.BYPRODUCT) {
                 g.fill(p.x() - 1, p.y() - 1, p.x() + ICON + 1, p.y() + ICON + 1, 0x22000000);
             }
@@ -196,9 +200,9 @@ public final class TreeRenderer {
                     pose.popMatrix();
                 }
             }
-            // 左上角：当前拥有量不足时显示拥有量（红字），足够时不显示。仅物品节点（非目标、非流体）。
-            // 同样 z=200 防止被物品图标深度测试剔除。
-            if (p.kind() != Kind.GOAL && !(p.content() instanceof FluidEmiStack)) {
+            // 左上角：当前拥有量不足时显示拥有量（红字），足够时不显示。仅物品节点（非目标、非流体、非未知）。
+            // 同样 z=200 防止被物品图标深度测试剔除。未知节点不显示假数量（需求 16）。
+            if (p.kind() != Kind.GOAL && !(p.content() instanceof FluidEmiStack) && !p.unknown()) {
                 try {
                     long owned = CraftInventory.count(invSnap, p.content());
                     if (owned < amt) {
@@ -257,7 +261,8 @@ public final class TreeRenderer {
         }
     }
 
-    /** tooltip 明细（追加在 EMI 原版 tooltip 下方）：需要量、拥有量（不足红字）、产出配方、可合成性。 */
+    /** tooltip 明细（追加在 EMI 原版 tooltip 下方）：需要量、拥有量（不足红字）、产出配方、可合成性。
+     *  需求 16：未知节点显示中立项（需要量照显 + "无可用库存" + "未知产物（不可自动合成）"）。 */
     private static void appendDetailLines(List<Component> lines, Placed p, EmiPlayerInventory invSnap) {
         try {
             long need = p.content().getAmount();
@@ -265,19 +270,24 @@ public final class TreeRenderer {
             if (need > 0) {
                 lines.add(Component.literal("需要: " + (fluid ? formatFluidAmount(need) : formatItemAmount(need))));
             }
-            if (!fluid && p.kind() != Kind.GOAL) {
+            if (!fluid && p.kind() != Kind.GOAL && !p.unknown()) {
                 long owned = CraftInventory.count(invSnap, p.content());
                 lines.add(owned < need
                         ? Component.literal("拥有: " + formatItemAmount(owned) + "（不足）")
                                 .withStyle(s -> s.withColor(0xFFFF5555))
                         : Component.literal("拥有: " + formatItemAmount(owned)));
+            } else if (p.unknown() && p.kind() != Kind.GOAL) {
+                // 需求 16：未知（不可计数）→ 显示"无可用库存"中立项，不显示假 0 / 假 ?
+                lines.add(Component.literal("库存: 无可用库存").withStyle(s -> s.withColor(0xFFAAAAAA)));
             }
             if (p.producer() != null) {
                 lines.add(Component.literal("由 " + producerOutputName(p.producer()) + " 合成"));
-            } else if (p.kind() != Kind.GOAL) {
+            } else if (p.kind() != Kind.GOAL && !p.unknown()) {
                 lines.add(Component.literal("库存直接获取"));
+            } else if (p.unknown()) {
+                lines.add(Component.literal("未知产物（不可自动合成）").withStyle(s -> s.withColor(0xFFAAAAAA)));
             }
-            if (p.kind() != Kind.BYPRODUCT) {
+            if (p.kind() != Kind.BYPRODUCT && !p.unknown()) {
                 lines.add(p.canCraft()
                         ? Component.literal("可合成").withStyle(s -> s.withColor(0xFF55FF55))
                         : Component.literal("材料不足，无法合成").withStyle(s -> s.withColor(0xFFFF5555)));
@@ -430,13 +440,14 @@ public final class TreeRenderer {
             }
             if (x + ICON <= matRight) {
                 out.add(new Placed(ti, x, curY, item.content(), Kind.MATERIAL, item.canCraft(), item.resolvedTo(),
-                        item.producer()));
+                        item.producer(), item.state()));
                 lineStart = false;
             }
             x += step;
             if (item.hasResolved()) {
                 if (x + ICON <= matRight) {
-                    out.add(new Placed(ti, x, curY, item.resolvedTo(), Kind.MATERIAL, true, null, null));
+                    out.add(new Placed(ti, x, curY, item.resolvedTo(), Kind.MATERIAL, true, null, null,
+                            TreeData.ResolveState.RESOLVED));
                 }
                 x += step;
             }
@@ -502,7 +513,7 @@ public final class TreeRenderer {
             }
             int top = y;
             out.add(new Placed(ti, goalX, top, tree.goal().content(), Kind.GOAL, tree.goal().canCraft(),
-                    tree.goal().resolvedTo(), tree.goal().producer()));
+                    tree.goal().resolvedTo(), tree.goal().producer(), tree.goal().state()));
 
             // 材料区从目标行（top）开始：leafTotal → 原分层 rows → directInputs，每行超宽自动换行铺满
             int curY = top;
@@ -520,7 +531,8 @@ public final class TreeRenderer {
                 int bx = matX;
                 for (EmiIngredient bp : tree.byproducts()) {
                     if (bx + ICON <= matRight) {
-                        out.add(new Placed(ti, bx, byproductY, bp, Kind.BYPRODUCT, true, null, null));
+                        out.add(new Placed(ti, bx, byproductY, bp, Kind.BYPRODUCT, true, null, null,
+                                TreeData.ResolveState.RESOLVED));
                     }
                     bx += ICON + itemGap();
                 }

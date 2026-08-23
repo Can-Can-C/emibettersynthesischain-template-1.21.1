@@ -73,6 +73,20 @@
 - **去重键 `key()`**：标签 `"tag:"+tagKey.location()`；物品/流体 `id#hashItemAndComponents(item)`（组件感知，区分不同药水/时长）。
 - **节点"可合成"判定（`TreeItem.canCraft`，标红依据）**：`InternalHelperImpl.canObtain(content, amount, preferred, depth)` 客户端干跑（与服务端一致）——自身数量足够 → true；否则**任一**产出它的**工作台配方**（首选 BoM 默认，再补全部工作台产出配方，跳过分解类，含标签成员）的子材料链式可得 → true；批数=ceil(需要/单批产出)，深度≤6；**非工作台配方 / 中间 3×3 未打开工作台界面 → false（标红）**。目标与材料节点均按此判定。
 
+### 5.1b 未知节点与"添加永不失败"（需求 16，2026-08-22 立项）
+- **目标**：与 EMI 同语义——添加=惰性存栈（不再全图严格预解析），树渲染时按需构建，**未知环节折叠为叶子**。
+- **依据**：EMI `TreeCost.calculateCost`（`bom/TreeCost.java`）：`recipe == null` 时 `addCost(node.ingredient, amount, …)`——**需求量来自父配方输入量，永远已知**；拥有量匹配基于背包物品栈（`calculateProgress` 把 `EmiPlayerInventory` 的栈放进 `remainders` 逐层扣减，虚拟栈匹配不上即"无库存项"）。
+- **节点状态**：`TreeItem` 增加 `resolveState`：`RESOLVED`（有子层）/ `LEAF_KNOWN`（可计数、无子层）/ `LEAF_UNKNOWABLE`（虚拟栈或不可转 ItemStack）。
+- **构建改动（InternalHelperImpl）**：
+  1. 添加（`buildTrees`）改为**宽松模式**：不再因"产源找不到/分解类/虚拟栈"失败——对应环节产出 `LEAF_*` 节点并继续；**单树构建 try/catch 容错**（个别异常配方不拖垮整批缓存）；
+  2. 每条链聚合时，`LEAF_*` 节点的需求量**照常计入 need/S**（来自父配方输入量），仅不向下展开；
+  3. 虚拟栈输入：能经"官方转换器"识别为物品的（如 Productive Bees 蜂笼等价，已有分支）维持**可计数**路径且**优先级高于**通用 LEAF_UNKNOWABLE；
+  4. `key()` 对虚拟栈用其 `EmiStack` 自身标识（组件/品种保留）。
+- **渲染改动（TreeRenderer）**：`LEAF_UNKNOWABLE` → 图标正常画（EMI 原版画虚拟栈），拥有量数字显示"需要量"、库存列显示"无可用库存"（灰色中立项，不显示假 0/?）；不参与标红判定；悬停灰框；tooltip 注明"未知产物（不可自动合成）"。
+- **自动合成交界（ClientCraftChain / AutoCraftClient）**：配方含不可计数输入（`hasUnknownInput`）→ 提示"材料包含未知产物，无法自动获取"（区别于"材料不足"/"非工作台配方"）；已合成已知前缀后停链。目标节点自身为未知 → 预检拒绝并提示。
+- **不影响**：全可解析链的既有路径（S/拥有量/标红/批次/AE2/PB）零改动；PB 虚拟栈分支保持原优先级（见 3）。
+- **回归清单**：① 原可添加链行为逐项不变；② 虚拟栈产物/分解类中间材料/无注册配方物品三类"以前失败"的配方可添加、可显示、S 完整、状态中立；③ 自动合成遇未知叶子按策略提示；④ 1.20.1 / 26.1.2 / main 三版本行为一致。
+
 ### 5.2 布局与渲染（TreeRenderer）
 ```
 [栅栏×3] │ [原木×2]                ← 最深

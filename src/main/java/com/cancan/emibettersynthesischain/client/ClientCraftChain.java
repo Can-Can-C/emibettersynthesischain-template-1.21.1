@@ -166,8 +166,10 @@ public final class ClientCraftChain {
         if (recipe == null) {
             com.cancan.emibettersynthesischain.EMIBettersynthesischain.LOGGER.info(
                     "EBS step: pickNext null (goal={}, remaining={})", goalRecipe.getId(), remainingTarget);
-            // 区分失败原因：存在非工作台默认配方（熔炉/锻造/机器等，链条不支持）→ 专有提示
-            fail(!force, hasNonWorkbenchDefault() ? "该配方无法在工作台内进行" : "无法自动合成：材料不足");
+            // 区分失败原因：存在非工作台默认配方（熔炉/锻造/机器等，链条不支持）→ 专有提示；
+            // 目标含不可计数输入 → "未知产物"提示（需求 16）
+            fail(!force, hasNonWorkbenchDefault() ? "该配方无法在工作台内进行"
+                    : (hasUnknownInput(goalRecipe) ? "材料包含未知产物，无法自动获取" : "无法自动合成：材料不足"));
             done = true;
             return;
         }
@@ -189,7 +191,8 @@ public final class ClientCraftChain {
         }
         // 数量感知预检：EMI 的 canCraft 按"种类"判断（同种物品需 2 个时 1 个也算够），必须按数量判定
         if (!canAfford(recipe)) {
-            fail(!force, "无法自动合成：材料不足");
+            // 需求 16：不可计数输入（虚拟产物）→ 专有提示（区别于材料不足）
+            fail(!force, hasUnknownInput(recipe) ? "材料包含未知产物，无法自动获取" : "无法自动合成：材料不足");
             done = true;
             return;
         }
@@ -892,6 +895,39 @@ public final class ClientCraftChain {
                     return true;
                 }
             }
+        }
+        return false;
+    }
+
+    /** 需求 16：配方存在**不可计数输入**（虚拟/自定义栈，无物品表示）→ 任何库存都放不了料，
+     *  提示"材料包含未知产物，无法自动获取"（区别于材料不足/非工作台配方）。 */
+    private static boolean hasUnknownInput(EmiRecipe recipe) {
+        try {
+            for (EmiIngredient ing : recipe.getInputs()) {
+                if (ing.isEmpty()) {
+                    continue;
+                }
+                java.util.List<EmiStack> stacks = ing.getEmiStacks();
+                if (stacks.isEmpty()) {
+                    continue;
+                }
+                boolean anyItem = false;
+                for (EmiStack s : stacks) {
+                    net.minecraft.world.item.ItemStack it = s.getItemStack();
+                    if (it != null && !it.isEmpty()) {
+                        anyItem = true;
+                        break;
+                    }
+                    if (ProductiveBeesSupport.isBeeEmiStack(s)) {
+                        anyItem = true;
+                        break;
+                    }
+                }
+                if (!anyItem) {
+                    return true;
+                }
+            }
+        } catch (Exception ignored) {
         }
         return false;
     }
