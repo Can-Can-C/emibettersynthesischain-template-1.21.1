@@ -61,7 +61,15 @@ neoForge {
             systemProperty 'mixin.debug.countInjections', 'true'
             systemProperty 'mixin.debug.export', 'true'
             systemProperty 'mixin.dumpTargetOnFailure', 'true'
-            jvmArgument '-XX:+AllowRedefinitionToAddMethod'
+            // 热交换开关随 JVM 版本：JDK24+ = AllowRedefinitionToAddDeleteMethods（旧的
+            // AllowRedefinitionToAddMethod 已被移除）；JDK21-23 = AllowRedefinitionToAddMethod；
+            // JDK<21（1.20.1/17）不支持增强重定义，不加（加了会 Unrecognized VM option）。
+            def javaVer = java.toolchain.languageVersion.get().asInt()
+            if (javaVer >= 24) {
+                jvmArgument '-XX:+AllowRedefinitionToAddDeleteMethods'
+            } else if (javaVer >= 21) {
+                jvmArgument '-XX:+AllowRedefinitionToAddMethod'
+            }
             def agent = rootProject.file('hotswap-agent.jar')
             if (agent.exists()) {
                 jvmArgument "-javaagent:${agent.absolutePath}"
