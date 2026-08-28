@@ -62,13 +62,13 @@ neoForge {
             systemProperty 'mixin.debug.countInjections', 'true'
             systemProperty 'mixin.debug.export', 'true'
             systemProperty 'mixin.dumpTargetOnFailure', 'true'
-            // 热交换开关随 JVM 版本：JDK24+ = AllowRedefinitionToAddDeleteMethods（旧的
-            // AllowRedefinitionToAddMethod 已被移除）；JDK21-23 = AllowRedefinitionToAddMethod；
-            // JDK<21（1.20.1/17）不支持增强重定义，不加（加了会 Unrecognized VM option）。
+            // 热交换开关随 JVM 版本：JDK24+ = AllowRedefinitionToAddDeleteMethods（旧名已移除）；
+            // JDK22-23 = AllowRedefinitionToAddMethod（JDK22 才引入；JDK21/17 无此选项→不加，
+            // 否则 runClient 报 Unrecognized VM option；普通方法体热交换 Ctrl+F9 不依赖它）。
             def javaVer = java.toolchain.languageVersion.get().asInt()
             if (javaVer >= 24) {
                 jvmArgument '-XX:+AllowRedefinitionToAddDeleteMethods'
-            } else if (javaVer >= 21) {
+            } else if (javaVer >= 22) {
                 jvmArgument '-XX:+AllowRedefinitionToAddMethod'
             }
             def agent = rootProject.file('hotswap-agent.jar')
