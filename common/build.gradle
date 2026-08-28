@@ -1,0 +1,34 @@
+// common 模块：业务/渲染/Mixin/配置值（EMI 式 common，无任何加载器入口）。
+// 依赖 MC + NeoForge（经 moddev 编译环境）与本地 jar（EMI/AE2/Productive Bees，编译期）。
+// run/资源/发布全部由平台模块（neoforge）负责；生产 jar 由 neoforge 合并本模块输出。
+
+plugins {
+    id 'java-library'
+    id 'net.neoforged.moddev' version '2.0.143'
+}
+
+version = rootProject.mod_version
+group = rootProject.mod_group_id
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+
+neoForge {
+    version = rootProject.neo_version
+    parchment {
+        mappingsVersion = rootProject.parchment_mappings_version
+        minecraftVersion = rootProject.parchment_minecraft_version
+    }
+    // 本模块仅声明 MC/NeoForge 编译环境；mod 声明与 run 配置在 neoforge 模块。
+}
+
+dependencies {
+    // EMI 本地 jar（compileOnly：编译期全量，包含我们要 Mixin 的内部类；运行期由 neoforge localRuntime 提供）
+    def emiJar = files(rootProject.file('libs/emi-1.1.24+1.21.1+neoforge.jar'))
+    compileOnly emiJar
+
+    // AE2 / Productive Bees（可选联动，仅编译期；运行期 mod 由 run/mods 提供，见 docs/02）
+    def ae2Jar = files(rootProject.file('libs/appliedenergistics2-19.2.17.jar'))
+    compileOnly ae2Jar
+    def pbJar = files(rootProject.file('libs/productivebees-1.21.1-13.13.3.jar'))
+    compileOnly pbJar
+}

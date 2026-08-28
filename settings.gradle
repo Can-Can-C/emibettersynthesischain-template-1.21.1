@@ -7,3 +7,12 @@ pluginManagement {
 plugins {
     id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
 }
+
+rootProject.name = 'emibettersynthesischain'
+
+// EMI 式模块化（common + platform）：
+//  common   — 业务/渲染/Mixin/配置值（依赖 MC+EMI，但不含任何加载器入口）
+//  neoforge — 平台模块（@Mod 入口、事件总线胶水、全部资源、run 配置；生产 jar 合并 common）
+// 1.20.1 分支的平台模块名为 forge/，26.1.2 分支命名为 neoforge/（同名但独立分支）。
+include 'common'
+include 'neoforge'

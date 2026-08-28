@@ -1,0 +1,157 @@
+// neoforge 平台模块（EMI 式 platform）：@Mod 入口、事件总线胶水、全部资源与 run 配置。
+// 生产 jar 合并 common 模块输出（类），资源仅在本模块（dev 与产出一致）。
+
+plugins {
+    id 'java-library'
+    id 'maven-publish'
+    id 'net.neoforged.moddev' version '2.0.143'
+    id 'idea'
+}
+
+version = rootProject.mod_version
+group = rootProject.mod_group_id
+
+sourceSets.main.resources {
+    srcDir('src/generated/resources')
+
+    // Exclude common development only resources from finalized outputs
+    exclude("**/*.bbmodel") // BlockBench project files
+
+    exclude("src/generated/**/.cache") // datagen cache files
+}
+
+repositories {
+    // NOTE: The official EMI maven (repo.sleeping.town) is unreachable from this network,
+    // so EMI is provided as a local jar in ./libs instead.
+    flatDir { dir rootProject.file('libs') }
+}
+
+base { archivesName = rootProject.mod_id }
+
+// Mojang ships Java 21 to end users in 1.21.1, so mods should target Java 21.
+java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+
+neoForge {
+    version = rootProject.neo_version
+
+    parchment {
+        mappingsVersion = rootProject.parchment_mappings_version
+        minecraftVersion = rootProject.parchment_minecraft_version
+    }
+
+    runs {
+        client {
+            client()
+            // Comma-separated list of namespaces to load gametests from. Empty = all namespaces.
+            systemProperty 'neoforge.enabledGameTestNamespaces', rootProject.mod_id
+        }
+
+        server {
+            server()
+            programArgument '--nogui'
+            systemProperty 'neoforge.enabledGameTestNamespaces', rootProject.mod_id
+        }
+
+        gameTestServer {
+            type = "gameTestServer"
+            systemProperty 'neoforge.enabledGameTestNamespaces', rootProject.mod_id
+        }
+
+        data {
+            data()
+            programArguments.addAll '--mod', rootProject.mod_id, '--all',
+                    '--output', file('src/generated/resources/').getAbsolutePath(),
+                    '--existing', file('src/main/resources/').getAbsolutePath()
+        }
+
+        // applies to all the run configs above
+        configureEach {
+            // Recommended logging data for a userdev environment
+            systemProperty 'forge.logging.markers', 'REGISTRIES'
+            logLevel = org.slf4j.event.Level.DEBUG
+
+            // ---- IDEA 调试：热交换（Hot Swap）+ Mixin 调试（详见 docs/06-IDEA_SETUP.md）----
+            // Mixin 调试：打印注入过程/统计/导出转换后 class；注入失败时导出目标类到 .mixin.out/
+            systemProperty 'mixin.debug.verbose', 'true'
+            systemProperty 'mixin.debug.countInjections', 'true'
+            systemProperty 'mixin.debug.export', 'true'
+            systemProperty 'mixin.dumpTargetOnFailure', 'true'
+            // Java 21 允许"添加方法/字段"型热重定义（HotSwapAgent 依赖；JDK>21 需改 DCEVM/其他方案）
+            jvmArgument '-XX:+AllowRedefinitionToAddMethod'
+            // 若根目录存在 hotswap-agent.jar（自行下载，见 docs/06），自动挂载类级热交换代理
+            def agent = rootProject.file('hotswap-agent.jar')
+            if (agent.exists()) {
+                jvmArgument "-javaagent:${agent.absolutePath}"
+            }
+        }
+    }
+
+    mods {
+        // define mod <-> source bindings
+        "${rootProject.mod_id}" {
+            sourceSet(sourceSets.main)
+        }
+    }
+}
+
+// Sets up a dependency configuration called 'localRuntime'.
+configurations {
+    runtimeClasspath.extendsFrom localRuntime
+}
+
+dependencies {
+    implementation project(':common')
+    // EMI 本地 jar：compileOnly（编译）/ localRuntime（开发运行，不打进发布包）
+    def emiJar = files(rootProject.file('libs/emi-1.1.24+1.21.1+neoforge.jar'))
+    compileOnly emiJar
+    localRuntime emiJar
+}
+
+// 生产 jar：合并 common 模块的类输出（资源全在本模块，无需合并）
+jar {
+    from project(':common').sourceSets.main.output
+}
+
+// 以下块与原单模块版一致：mods.toml 模板变量展开
+var generateModMetadata = tasks.register("generateModMetadata", ProcessResources) {
+    var replaceProperties = [
+            minecraft_version      : rootProject.minecraft_version,
+            minecraft_version_range: rootProject.minecraft_version_range,
+            neo_version            : rootProject.neo_version,
+            loader_version_range   : rootProject.loader_version_range,
+            mod_id                 : rootProject.mod_id,
+            mod_name               : rootProject.mod_name,
+            mod_license            : rootProject.mod_license,
+            mod_version            : rootProject.mod_version,
+    ]
+    inputs.properties replaceProperties
+    expand replaceProperties
+    from "src/main/templates"
+    into "build/generated/sources/modMetadata"
+}
+// Include the output of "generateModMetadata" as an input directory for the build
+sourceSets.main.resources.srcDir generateModMetadata
+// To avoid having to run "generateModMetadata" manually, make it run on every project reload
+neoForge.ideSyncTask generateModMetadata
+
+// Example configuration to allow publishing using the maven-publish plugin
+publishing {
+    publications {
+        register('mavenJava', MavenPublication) {
+            from components.java
+        }
+    }
+    repositories {
+        maven {
+            url "file://${project.projectDir}/repo"
+        }
+    }
+}
+
+// IDEA no longer automatically downloads sources/javadoc jars for dependencies, so we need to explicitly enable the behavior.
+idea {
+    module {
+        downloadSources = true
+        downloadJavadoc = true
+    }
+}

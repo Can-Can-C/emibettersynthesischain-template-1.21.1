@@ -129,6 +129,15 @@
 - [x] 12.4 **26.1.2-neoforge 同步**（同批差异清单）。
 - [x] 12.5 **用户验收通过（2026-08-23）**：三类"以前失败"的配方（虚拟栈产物/分解类中间材料/无注册配方物品）可添加/显示、S 完整、状态中立；自动合成遇虚拟材料红字"材料包含未知产物，无法自动获取"；既有路径（S/标红/蜜蜂/AE2/V 三键/批量）回归不变。**需求16 归档。**
 
+## Phase 13 — common+platform 模块化 + IDEA 热交换/Mixin 调试（2026-08-23 立项）
+- 目标：EMI 式模块架构（common 业务 + platform 加载器胶水）+ IDE 运行/调试体验。机制见 docs/02 7b 与 docs/06。
+- [ ] 13.1 **main 拆分**：`common/`（client+mixin+Config+常量宿主）、`neoforge/`（@Mod 入口 EMIBettersynthesischainMod/client + 全部资源）；根变聚合器；生产 jar 合并 common。
+- [ ] 13.2 **main 构建绿** + 合并 jar 冒烟（入口/类/资源齐全，`:neoforge:runClient` 可用）。
+- [ ] 13.3 **IDEA 调试**：runs 内置 HotSwapAgent 自动挂载 + `-XX:+AllowRedefinitionToAddMethod` + Mixin 四开关；docs/06 编写。
+- [ ] 13.4 **1.20.1-forge 同结构移植**（平台模块 `forge/`，ForgeGradle 6 多模块）。
+- [ ] 13.5 **26.1.2-neoforge 同结构移植**。
+- [ ] 13.6 **验证**：三版本构建绿 + 用户 IDEA 实测（Debug runClient + 热交换 + Mixin 日志）。
+
 ## 通用流程（每次会话）
 1. 读 `devlog/` 当日日志 + 本文件定位阶段。
 2. 按 `docs/02-TECHNICAL_DESIGN.md` 实现。
