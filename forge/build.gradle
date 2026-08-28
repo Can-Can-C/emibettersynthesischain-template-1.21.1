@@ -32,7 +32,8 @@ minecraft {
             property 'mixin.debug.countInjections', 'true'
             property 'mixin.debug.export', 'true'
             property 'mixin.dumpTargetOnFailure', 'true'
-            jvmArg '-XX:+AllowRedefinitionToAddMethod'
+            // JDK17（1.20.1）不支持增强重定义：不加 AllowRedefinition*（否则 Unrecognized VM option）。
+            // 只挂 HotSwapAgent（若存在）；普通方法体热交换（Ctrl+F9）不依赖该开关。
             if (rootProject.file('hotswap-agent.jar').exists()) {
                 jvmArg "-javaagent:${rootProject.file('hotswap-agent.jar').absolutePath}"
             }
