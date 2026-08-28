@@ -131,7 +131,15 @@
 - [x] 12.1 **文档立项**：docs/01（需求 16 + 变更记录）、docs/02（5.1b：resolveState 三态、宽松构建、叶子语义、PB 优先级、自动合成交界）。
 - [x] 12.2 **代码实施（三分支已落地）**：TreeData.ResolveState 三态；InternalHelperImpl 宽松构建（单树容错 + resolveStateOf）；TreeRenderer（中立项：不标红/悬停灰/无库存/未知 tooltip）；ClientCraftChain（hasUnknownInput 专有提示）。
 - [x] 12.3 **构建自验**：1.20.1 / main / 26.1.2 三版本 `./gradlew build` BUILD SUCCESSFUL。
-- [ ] 12.5 **用户验收**：三类配方可添加/显示/S 完整/状态中立；自动合成未知叶子按策略提示；既有路径回归不变。
+- [x] 12.5 **用户验收通过（2026-08-23）**：三类"以前失败"的配方（虚拟栈产物/分解类中间材料/无注册配方物品）可添加/显示、S 完整、状态中立；自动合成遇虚拟材料红字"材料包含未知产物，无法自动获取"；既有路径（S/标红/蜜蜂/AE2/V 三键/批量）回归不变。**需求16 归档。**
+
+## Phase 13 — common+platform 模块化 + IDEA 热交换/Mixin 调试（2026-08-23 立项）
+- 目标：EMI 式模块架构（common 业务 + platform 加载器胶水）+ IDE 运行/调试体验。机制见 docs/02 7b 与 docs/06。
+- [ ] 13.1 **main 拆分**：`common/`（client+mixin+Config+常量宿主）、`neoforge/`（@Mod 入口 + 全部资源）；根变聚合器。
+- [ ] 13.2 **main 构建绿** + 合并 jar 冒烟 + docs/06。
+- [ ] 13.5 **26.1.2-neoforge 同结构移植**（本分支，2026-08-23 已落地）。
+- [ ] 13.4 **1.20.1-forge 同结构移植**（平台模块 `forge/`，ForgeGradle 6 多模块）。
+- [ ] 13.6 **验证**：三版本构建绿 + 用户 IDEA 实测（Debug runClient + 热交换 + Mixin 日志）。
 
 ## 通用流程（每次会话）
 1. 读 `devlog/` 当日日志 + 本文件定位阶段。

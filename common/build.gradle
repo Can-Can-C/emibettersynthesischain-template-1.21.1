@@ -1,0 +1,23 @@
+// common 模块：业务/渲染/Mixin/配置值（EMI 式 common，无任何加载器入口）。
+plugins {
+    id 'java-library'
+    id 'net.neoforged.moddev' version '2.0.144'
+}
+
+version = rootProject.mod_version
+group = rootProject.mod_group_id
+
+// 26.1.2 分支：Java 版本随 NeoForge 26.x 要求（与主模块一致）
+java.toolchain.languageVersion = JavaLanguageVersion.of(25)
+
+neoForge {
+    version = rootProject.neo_version
+    // 本模块仅声明 MC/NeoForge 编译环境；mod/run 在 neoforge 模块。
+}
+
+dependencies {
+    // EMI（26.1.2 非官方重建 1.1.24）：compileOnly 编进 classpath（含我们 Mixin 的内部类）；
+    // 运行期由 neoforge localRuntime 提供。AE2/Productive Bees 待 11.5 jar。
+    def emiJar = files(rootProject.file('libs/emi-1.1.24-63e8aef+26.1.2+neoforge.jar'))
+    compileOnly emiJar
+}

@@ -1,0 +1,133 @@
+// neoforge 平台模块（EMI 式 platform）：@Mod 入口、事件总线胶水、全部资源与 run 配置。
+// 生产 jar 合并 common 模块输出（类），资源仅在本模块（dev 与产出一致）。
+
+plugins {
+    id 'java-library'
+    id 'maven-publish'
+    id 'net.neoforged.moddev' version '2.0.144'
+    id 'idea'
+}
+
+version = rootProject.mod_version
+group = rootProject.mod_group_id
+
+sourceSets.main.resources {
+    srcDir('src/generated/resources')
+    exclude("**/*.bbmodel") // BlockBench project files
+    exclude("src/generated/**/.cache") // datagen cache files
+}
+
+repositories {
+    // 官方 EMI maven（repo.sleeping.town）本网络不可达 → EMI 用本地 jar（./libs）
+    flatDir { dir rootProject.file('libs') }
+}
+
+base { archivesName = rootProject.mod_id }
+
+// 26.1.2 分支：Java 版本随 NeoForge 26.x 要求
+java.toolchain.languageVersion = JavaLanguageVersion.of(25)
+
+neoForge {
+    version = rootProject.neo_version
+
+    // 26.1.2 无 parchment 依赖（如后续有再启）
+
+    runs {
+        client {
+            client()
+            systemProperty 'neoforge.enabledGameTestNamespaces', rootProject.mod_id
+        }
+        server {
+            server()
+            programArgument '--nogui'
+            systemProperty 'neoforge.enabledGameTestNamespaces', rootProject.mod_id
+        }
+        gameTestServer {
+            type = "gameTestServer"
+            systemProperty 'neoforge.enabledGameTestNamespaces', rootProject.mod_id
+        }
+        data {
+            data()
+            programArguments.addAll '--mod', rootProject.mod_id, '--all',
+                    '--output', file('src/generated/resources/').getAbsolutePath(),
+                    '--existing', file('src/main/resources/').getAbsolutePath()
+        }
+        configureEach {
+            systemProperty 'forge.logging.markers', 'REGISTRIES'
+            logLevel = org.slf4j.event.Level.DEBUG
+
+            // ---- IDEA 调试：热交换（Hot Swap）+ Mixin 调试（详见 docs/06-IDEA_SETUP.md）----
+            systemProperty 'mixin.debug.verbose', 'true'
+            systemProperty 'mixin.debug.countInjections', 'true'
+            systemProperty 'mixin.debug.export', 'true'
+            systemProperty 'mixin.dumpTargetOnFailure', 'true'
+            jvmArgument '-XX:+AllowRedefinitionToAddMethod'
+            def agent = rootProject.file('hotswap-agent.jar')
+            if (agent.exists()) {
+                jvmArgument "-javaagent:${agent.absolutePath}"
+            }
+        }
+    }
+
+    mods {
+        "${rootProject.mod_id}" {
+            sourceSet(sourceSets.main)
+        }
+    }
+}
+
+configurations {
+    runtimeClasspath.extendsFrom localRuntime
+}
+
+dependencies {
+    implementation project(':common')
+    // EMI（26.1.2 非官方重建 1.1.24）：compileOnly 编译 / localRuntime 开发运行
+    def emiJar = files(rootProject.file('libs/emi-1.1.24-63e8aef+26.1.2+neoforge.jar'))
+    compileOnly emiJar
+    localRuntime emiJar
+}
+
+// 生产 jar：合并 common 模块的类输出（资源全在本模块）
+jar {
+    from project(':common').sourceSets.main.output
+}
+
+var generateModMetadata = tasks.register("generateModMetadata", ProcessResources) {
+    var replaceProperties = [
+            minecraft_version      : rootProject.minecraft_version,
+            minecraft_version_range: rootProject.minecraft_version_range,
+            neo_version            : rootProject.neo_version,
+            loader_version_range   : rootProject.loader_version_range,
+            mod_id                 : rootProject.mod_id,
+            mod_name               : rootProject.mod_name,
+            mod_license            : rootProject.mod_license,
+            mod_version            : rootProject.mod_version,
+    ]
+    inputs.properties replaceProperties
+    expand replaceProperties
+    from "src/main/templates"
+    into "build/generated/sources/modMetadata"
+}
+sourceSets.main.resources.srcDir generateModMetadata
+neoForge.ideSyncTask generateModMetadata
+
+publishing {
+    publications {
+        register('mavenJava', MavenPublication) {
+            from components.java
+        }
+    }
+    repositories {
+        maven {
+            url "file://${project.projectDir}/repo"
+        }
+    }
+}
+
+idea {
+    module {
+        downloadSources = true
+        downloadJavadoc = true
+    }
+}
