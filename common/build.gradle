@@ -1,0 +1,32 @@
+// common 模块：业务/渲染/Mixin/配置值（EMI 式 common，无任何加载器入口）。
+plugins {
+    id 'java-library'
+    id 'net.minecraftforge.gradle' version '[6.0.24,6.2)'
+}
+
+version = rootProject.mod_version
+group = rootProject.mod_group_id
+
+// 1.20.1 官方客户端用 Java 17
+java.toolchain.languageVersion = JavaLanguageVersion.of(17)
+
+minecraft {
+    mappings channel: "${rootProject.mappings_channel}", version: "${rootProject.mappings_version}"
+}
+
+repositories {
+    // 官方 EMI maven（repo.sleeping.town）本网络不可达 → EMI 用本地 jar（./libs）
+    flatDir { dir rootProject.file('libs') }
+}
+
+dependencies {
+    minecraft "net.minecraftforge:forge:${rootProject.forge_version}"
+
+    // EMI（1.20.1 Forge 官方构建，SRG 风味）：fg.deobf 重映射到开发环境官方名供编译。
+    // 运行期由 forge 平台模块负责（runtimeOnly）。
+    def emiJar = fg.deobf(files(rootProject.file('libs/emi-1.1.24+1.20.1+forge.1.jar')))
+    compileOnly emiJar
+
+    // MixinExtras 语法（@Local 等；ConfigScreenMixin 需要）编译期
+    compileOnly fg.deobf("io.github.llamalad7:mixinextras-common:0.3.6")
+}

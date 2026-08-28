@@ -1,0 +1,103 @@
+// forge 平台模块（EMI 式 platform）：@Mod 入口、事件总线胶水、全部资源与 run 配置。
+// 生产 jar 合并 common 模块输出（类），资源仅在本模块（dev 与产出一致）。
+
+plugins {
+    id 'java-library'
+    id 'net.minecraftforge.gradle' version '[6.0.24,6.2)'
+    id 'org.spongepowered.mixin' version '0.7.+'
+    id 'idea'
+}
+
+version = rootProject.mod_version
+group = rootProject.mod_group_id
+
+base { archivesName = rootProject.mod_id }
+
+// 1.20.1 官方客户端用 Java 17
+java.toolchain.languageVersion = JavaLanguageVersion.of(17)
+
+minecraft {
+    mappings channel: "${rootProject.mappings_channel}", version: "${rootProject.mappings_version}"
+
+    runs {
+        client {
+            workingDirectory project.file('run')
+            property 'forge.logging.markers', 'REGISTRIES'
+            property 'forge.logging.console.level', 'debug'
+            // dev 运行时把 refmap 里 SRG 目标名映射回官方名（生产 refmap 见 emibettersynthesischain.refmap.json）
+            property 'mixin.env.remapRefMap', 'true'
+            property 'mixin.env.refMapRemappingFile', "${projectDir}/build/createSrgToMcp/output.srg"
+            // ---- IDEA 调试：热交换（Hot Swap）+ Mixin 调试（详见 docs/06-IDEA_SETUP.md）----
+            property 'mixin.debug.verbose', 'true'
+            property 'mixin.debug.countInjections', 'true'
+            property 'mixin.debug.export', 'true'
+            property 'mixin.dumpTargetOnFailure', 'true'
+            jvmArg '-XX:+AllowRedefinitionToAddMethod'
+            if (rootProject.file('hotswap-agent.jar').exists()) {
+                jvmArg "-javaagent:${rootProject.file('hotswap-agent.jar').absolutePath}"
+            }
+            mods { "${rootProject.mod_id}" { source sourceSets.main } }
+        }
+        server {
+            workingDirectory project.file('run')
+            property 'forge.logging.markers', 'REGISTRIES'
+            property 'forge.logging.console.level', 'debug'
+            mods { "${rootProject.mod_id}" { source sourceSets.main } }
+        }
+        data {
+            workingDirectory project.file('run')
+            property 'forge.logging.markers', 'REGISTRIES'
+            property 'forge.logging.console.level', 'debug'
+            args '--mod', rootProject.mod_id, '--all', '--output', file('src/generated/resources/'),
+                    '--existing', file('src/main/resources/')
+            mods { "${rootProject.mod_id}" { source sourceSets.main } }
+        }
+    }
+}
+
+// Mixin：注册 config（dev 经 mixin.env.remapRefMap 映射；生产同名）
+mixin {
+    config "${rootProject.mod_id}.mixins.json"
+}
+
+sourceSets.main.resources {
+    srcDir 'src/generated/resources'
+}
+
+repositories {
+    // 官方 EMI maven（repo.sleeping.town）本网络不可达 → EMI 用本地 jar（./libs）
+    flatDir { dir rootProject.file('libs') }
+}
+
+dependencies {
+    minecraft "net.minecraftforge:forge:${rootProject.forge_version}"
+
+    implementation project(':common')
+
+    // MixinExtras（@Local 等；forge 壳是 jarjar 薄壳，dev 运行时需要）
+    implementation fg.deobf("io.github.llamalad7:mixinextras-common:0.3.6")
+    implementation fg.deobf("io.github.llamalad7:mixinextras-forge:0.3.6")
+
+    // EMI（1.20.1 Forge 官方构建）：compileOnly 编译；runtimeOnly 供 runClient；不打进 mod 包
+    def emiJar = fg.deobf(files(rootProject.file('libs/emi-1.1.24+1.20.1+forge.1.jar')))
+    compileOnly emiJar
+    runtimeOnly emiJar
+}
+
+processResources {
+    // 1.20.1 mods.toml 用硬编码值（见 src/main/resources/META-INF/mods.toml）：
+    // ForgeGradle 的 expand 会把 TOML 当 Groovy 模板解析，中文/全角字符易触发解析失败。
+}
+
+jar {
+    manifest {
+        attributes([
+                'Specification-Title'     : rootProject.mod_id,
+                'Specification-Version'   : '1',
+                'Implementation-Title'    : rootProject.mod_name,
+                'Implementation-Version'  : rootProject.mod_version,
+        ])
+    }
+    // 生产 jar：合并 common 模块的类输出（资源全在本模块）
+    from project(':common').sourceSets.main.output
+}

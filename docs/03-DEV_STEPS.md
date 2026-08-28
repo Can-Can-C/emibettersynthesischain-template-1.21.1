@@ -126,10 +126,17 @@
 ## Phase 12 — 显示能力不失败 + 未知节点语义（需求 16，2026-08-22 立项）
 - 需求见 docs/01 需求 16；设计见 docs/02 5.1b。策略同 Phase 11：先 1.20.1-forge，再 26.1.2-neoforge 与 main。
 - [x] 12.1 **文档立项**：docs/01（需求 16 + 变更记录）、docs/02（5.1b：resolveState 三态、宽松构建、叶子语义、PB 优先级、自动合成交界）、本清单。
-- [ ] 12.2 **1.20.1-forge 实现**：InternalHelperImpl 宽松构建（LEAF_KNOWN/LEAF_UNKNOWABLE + S 照常计数）；TreeRenderer（虚拟栈图标/中立项/无库存标注/tooltip）；ClientCraftChain/AutoCraftClient（遇 LEAF 停链 + 明确提示）。
-- [ ] 12.3 **构建自验**：`./gradlew build` BUILD SUCCESSFUL；运行期冒烟（能添加三类"以前失败"的配方）。
-- [ ] 12.4 **26.1.2-neoforge / main 同步**（同批差异清单）。
-- [ ] 12.5 **用户验收**：三类配方可添加/显示/S 完整/状态中立；自动合成未知叶子按策略提示；既有路径回归不变。
+- [x] 12.2 **1.20.1-forge 实现**：InternalHelperImpl 宽松构建（LEAF_KNOWN/LEAF_UNKNOWABLE + S 照常计数）；TreeRenderer（虚拟栈图标/中立项/无库存标注/tooltip）；ClientCraftChain/AutoCraftClient（遇 LEAF 停链 + 明确提示）。
+- [x] 12.3 **构建自验**：`./gradlew build` BUILD SUCCESSFUL。
+- [x] 12.4 **26.1.2-neoforge / main 同步**（同批差异清单）。
+- [x] 12.5 **用户验收通过（2026-08-23）**：三类"以前失败"的配方（虚拟栈产物/分解类中间材料/无注册配方物品）可添加/显示、S 完整、状态中立；自动合成遇虚拟材料红字"材料包含未知产物，无法自动获取"；既有路径（S/标红/蜜蜂/AE2/V 三键/批量）回归不变。**需求16 归档。**
+
+## Phase 13 — common+platform 模块化 + IDEA 热交换/Mixin 调试（2026-08-23 立项）
+- 目标：EMI 式模块架构（common 业务 + platform 加载器胶水）+ IDE 运行/调试体验。机制见 docs/02 7b 与 docs/06。
+- [ ] 13.1 **main 拆分**：`common/` + `neoforge/`；根变聚合器；构建绿；合并 jar 冒烟；docs/06。
+- [ ] 13.5 **26.1.2-neoforge 移植**（2026-08-23 已落地，`4da757f`）。
+- [ ] 13.4 **1.20.1-forge 移植**（本分支，2026-08-23 已落地；平台模块 `forge/`，ForgeGradle 6 多模块）。
+- [ ] 13.6 **验证**：三版本构建绿 + 用户 IDEA 实测（Debug runClient + 热交换 + Mixin 日志）。
 
 ## 通用流程（每次会话）
 1. 读 `devlog/` 当日日志 + 本文件定位阶段。

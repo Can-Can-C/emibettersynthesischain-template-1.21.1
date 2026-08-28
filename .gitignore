@@ -47,3 +47,7 @@ repo/
 
 # 本地测试包（1.20.1 用启动器自行组装）
 dist/
+
+hotswap-agent.jar
+.mixin.out/
+run/.mixin.out/

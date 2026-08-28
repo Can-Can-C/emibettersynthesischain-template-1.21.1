@@ -11,3 +11,9 @@ pluginManagement {
 plugins {
     id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
 }
+
+rootProject.name = 'emibettersynthesischain'
+
+// EMI 式模块化（common + platform）：common = 业务/渲染/Mixin/配置值；forge = 平台入口与资源。
+include 'common'
+include 'forge'

@@ -157,6 +157,27 @@
 - **重置按钮**：组尾 `ConfigResetButton`（`client/`，非 mixin 包；`ConfigEntryWidget` + `EmiPort.newButton`）→ `Config.resetAll()` 恢复全部默认并落盘。
 
 ## 7. 目录结构
+
+### 7b. 模块化（EMI 式 common + platform，2026-08-23 起）
+```
+仓库根（聚合器，不打包代码）
+├─ common/                            业务/渲染/Mixin/配置值（无加载器入口）
+│  └─ src/main/java/com/cancan/emibettersynthesischain/
+│     ├─ EMIBettersynthesischain.java    常量宿主（MODID/LOGGER；原 @Mod 入口已拆至平台）
+│     ├─ Config.java                     ForgeConfigSpec 配置值（SPEC 注册在平台入口）
+│     ├─ client/                         同 7a 的 client/* 全部（含 StackCompat）
+│     └─ mixin/                          同 7a 的 mixin/* 全部
+└─ forge/                            平台模块（1.20.1 分支；main/26.1.2 为 neoforge/）
+   └─ src/main/
+      ├─ java/com/cancan/emibettersynthesischain/
+      │  ├─ EMIBettersynthesischainMod.java   @Mod（BOTH：注册 Config.SPEC + 客户端 setup）
+      │  └─ EMIBettersynthesischainClient.java 客户端事件/快捷键（入口 init 初始化）
+      └─ resources/                    全部资源（assets lang、mixins.json、生产 refmap、META-INF/mods.toml）
+```
+- 约定：common **不携带资源**（生产/dev 都由平台模块提供资源，避免 dev 找不到资产）；生产 jar 由平台模块合并 common 的 class 输出（`jar { from project(':common').sourceSets.main.output }`）。
+- run 配置含 **IDEA 调试项**：HotSwapAgent 自动挂载（仓库根 `hotswap-agent.jar` 存在时）+ `-XX:+AllowRedefinitionToAddMethod` + Mixin 调试四开关（`mixin.debug.verbose/countInjections/export/dumpTargetOnFailure`），详见 `docs/06-IDEA_SETUP.md`。
+
+### 7a. 单模块布局（历史/参考，模块化前）
 ```
 src/main/java/com/cancan/emibettersynthesischain/
 ├─ EMIBettersynthesischain.java        @Mod（注册配置）
