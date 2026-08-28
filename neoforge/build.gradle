@@ -77,11 +77,13 @@ neoForge {
             systemProperty 'mixin.debug.countInjections', 'true'
             systemProperty 'mixin.debug.export', 'true'
             systemProperty 'mixin.dumpTargetOnFailure', 'true'
-            // Java 21 允许"添加方法/字段"型热重定义（HotSwapAgent 依赖；JDK>21 需改 DCEVM/其他方案）
+            // 热交换参数随 JVM 版本：JDK24+ = AllowRedefinitionToAddDeleteMethods（旧名已移除）；
+            // JDK22-23 = AllowRedefinitionToAddMethod（JDK22 才引入，JDK21 无此选项→不加，
+            // 否则 Unrecognized VM option；JDK21 下普通方法体热交换/Ctrl+F9 不依赖它）。
             def javaVer = java.toolchain.languageVersion.get().asInt()
             if (javaVer >= 24) {
                 jvmArgument '-XX:+AllowRedefinitionToAddDeleteMethods'
-            } else if (javaVer >= 21) {
+            } else if (javaVer >= 22) {
                 jvmArgument '-XX:+AllowRedefinitionToAddMethod'
             }
             // 若根目录存在 hotswap-agent.jar（自行下载，见 docs/06），自动挂载类级热交换代理
