@@ -1,4 +1,4 @@
-# docs/06 — IDEA 开发与调试（Hot Swap + Mixin 调试）
+﻿# docs/06 — IDEA 开发与调试（Hot Swap + Mixin 调试）
 
 > 对应需求：common+platform 模块化 + IDEA 热交换/Mixin 调试（2026-08-23）。
 > 适用于 main（neoforge 平台）/ 26.1.2（neoforge 平台）/ 1.20.1（forge 平台）。示例以 main 为模板，
@@ -60,3 +60,15 @@ forge/     — （1.20.1 分支的平台模块）
 - 改了 common 代码不生效 → 热交换只对已加载类生效；新增/结构性改动重启 runClient。
 - IDEA Debug 下 `run/.mixin.out/` 很大 → 属正常，已在 .gitignore。
 - 分支切换后 Gradle 任务名变化（:forge: 等）→ 重新 Reload 项目。
+
+## 5. 多版本启动速查（三分支）
+
+| 版本 | 分支 | 必选 JDK | 启动方式 |
+|---|---|---|---|
+| 1.21.1 | main | 21（toolchain 自动；Gradle 9.2.1 可用 17-25 跑） | `.\gradlew.bat :neoforge:runClient` |
+| 1.20.1 | 1.20.1-forge | **17（必须）**：Gradle 8.7 上限 JVM 21；FG6 不兼容 Gradle 9 | 先 `$env:JAVA_HOME="C:\Program Files\Java\jdk-17"` 再 `C:\gradle-tools\gradle-8.7\bin\gradle.bat :forge:build`。**dev runClient 不可用**（EMI 官方 jar 为 SRG 风味，Forge dev 官方名运行时不兼容）→ 打包装真机 Forge 实例测试 |
+| 26.1.2 | 26.1.2-neoforge | 25（toolchain） | `.\gradlew.bat :neoforge:runClient`（JAVA_HOME 保持默认 25） |
+
+- 报 `Unsupported class file major version 69` = Gradle 守护进程跑在过新的 JDK：按上表设该分支的 JAVA_HOME（1.20.1 必须是 17）重跑；IDEA 里同样把 **Gradle JVM** 设成对应 JDK（File → Settings → Build Tools → Gradle）后 Reload。
+- 切版本：`git checkout <分支>`（工作区随分支切换）；IDEA 里切分支后 **Reload All Gradle Projects**。
+- 1.20.1 构建（打包）：`$env:JAVA_HOME=...jdk-17; C:\gradle-tools\gradle-8.7\bin\gradle.bat build` → 产物 `forge/build/libs/emibettersynthesischain-2.2.1.jar`（已合并 common）。
