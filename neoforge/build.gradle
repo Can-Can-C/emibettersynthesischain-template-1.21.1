@@ -79,8 +79,11 @@ neoForge {
     }
 
     mods {
+        // 多模块：同一 mod 声明包含平台 + common 两个 sourceSet——
+        // 否则 dev 运行时只打包本模块类，common 类缺失（NoClassDefFoundError: EMIBettersynthesischain）
         "${rootProject.mod_id}" {
             sourceSet(sourceSets.main)
+            sourceSet(project(':common').sourceSets.main)
         }
     }
 }
