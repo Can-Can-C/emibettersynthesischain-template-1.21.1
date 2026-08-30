@@ -3,6 +3,7 @@ package com.cancan.emibettersynthesischain.client;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.cancan.emibettersynthesischain.Config;
 import dev.emi.emi.api.recipe.EmiPlayerInventory;
 import dev.emi.emi.api.recipe.handler.EmiRecipeHandler;
 import dev.emi.emi.api.recipe.handler.StandardRecipeHandler;
@@ -58,6 +59,10 @@ public final class Ae2Support {
      */
     public static long networkSignature() {
         if (!isLoaded()) {
+            return 0;
+        }
+        // 需求：AE 存储检测开关（默认关闭）——关闭时不参与网络内容变化检测
+        if (!Config.TREE_AE_STORAGE_CHECK.get()) {
             return 0;
         }
         Minecraft mc = Minecraft.getInstance();
@@ -172,6 +177,10 @@ public final class Ae2Support {
     @SuppressWarnings({"rawtypes", "unchecked"})
     public static EmiPlayerInventory mergedInventory(AbstractContainerScreen<?> screen) {
         if (!isLoaded() || screen == null) {
+            return null;
+        }
+        // 需求：AE 存储检测开关（默认关闭）——关闭时树/预检不读取网络存储（回退原逻辑）
+        if (!Config.TREE_AE_STORAGE_CHECK.get()) {
             return null;
         }
         Minecraft mc = Minecraft.getInstance();

@@ -82,6 +82,8 @@ public abstract class ConfigScreenMixin extends Screen {
         addInt(list, self, searchFn, "ebs.config.tree.treeGap", Config.TREE_TREE_GAP, root, tree);
         addInt(list, self, searchFn, "ebs.config.tree.byproductGap", Config.TREE_BYPRODUCT_GAP, root, tree);
         addBool(list, self, searchFn, "ebs.config.tree.redMarking", Config.TREE_RED_MARKING, root, tree);
+        // AE 存储物品检测（默认关闭）：ME 终端内树/标红/可合成判定是否包含网络存储
+        addBool(list, self, searchFn, "ebs.config.tree.aeStorageCheck", Config.TREE_AE_STORAGE_CHECK, root, tree);
         // Q1/Q2: 产物列左右（勾选=在右）+ 背景透明开关
         addGoalSide(list, self, searchFn, root, tree);
         addBool(list, self, searchFn, "ebs.config.tree.backgroundTransparent",
