@@ -37,13 +37,13 @@ minecraft {
             if (rootProject.file('hotswap-agent.jar').exists()) {
                 jvmArg "-javaagent:${rootProject.file('hotswap-agent.jar').absolutePath}"
             }
-            mods { "${rootProject.mod_id}" { source sourceSets.main } }
+            mods { "${rootProject.mod_id}" { source sourceSets.main; source project(':common').sourceSets.main } }
         }
         server {
             workingDirectory project.file('run')
             property 'forge.logging.markers', 'REGISTRIES'
             property 'forge.logging.console.level', 'debug'
-            mods { "${rootProject.mod_id}" { source sourceSets.main } }
+            mods { "${rootProject.mod_id}" { source sourceSets.main; source project(':common').sourceSets.main } }
         }
         data {
             workingDirectory project.file('run')
@@ -51,7 +51,7 @@ minecraft {
             property 'forge.logging.console.level', 'debug'
             args '--mod', rootProject.mod_id, '--all', '--output', file('src/generated/resources/'),
                     '--existing', file('src/main/resources/')
-            mods { "${rootProject.mod_id}" { source sourceSets.main } }
+            mods { "${rootProject.mod_id}" { source sourceSets.main; source project(':common').sourceSets.main } }
         }
     }
 }
