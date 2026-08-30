@@ -57,9 +57,10 @@ neoForge {
             systemProperty 'neoforge.enabledGameTestNamespaces', rootProject.mod_id
         }
 
-        clientData {
-            // moddev 2.0.x：datagen 运行类型已由 data() 改名为 clientData()（服务端用 serverData()）
-            clientData()
+        data {
+            // moddev 2.0.143（本分支 main/1.21.1）：datagen 运行类型为 data()
+            // （2.0.144 才改名 clientData——那是 26.1.2 分支的用法）
+            data()
             programArguments.addAll '--mod', rootProject.mod_id, '--all',
                     '--output', file('src/generated/resources/').getAbsolutePath(),
                     '--existing', file('src/main/resources/').getAbsolutePath()
