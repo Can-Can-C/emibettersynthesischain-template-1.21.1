@@ -84,4 +84,26 @@ public abstract class EmiScreenManagerMixin {
             cir.setReturnValue(EmiStackInteraction.EMPTY);
         }
     }
+
+    /**
+     * 树模式点击屏蔽：鼠标在收藏面板（树区）上时，EMI 的 mouseClicked 一律消费——
+     * 防止点击"点穿"到下层收藏夹物品（悬停已用 getHoveredStack EMPTY 屏蔽，点击需单独处理）。
+     * 树节点自身交互走平台层 InputEvent.MouseButton，不依赖 EMI 返回值。
+     */
+    @Inject(method = "mouseClicked(Lnet/minecraft/client/input/MouseButtonEvent;)Z",
+            at = @At("HEAD"), cancellable = true)
+    private static void ebs$blockFavoritesClick(net.minecraft.client.input.MouseButtonEvent e,
+            CallbackInfoReturnable<Boolean> cir) {
+        if (!TreeMode.isActive()) {
+            return;
+        }
+        IEmiInternal helper = InternalHelperImpl.INSTANCE;
+        Bounds bounds = helper.getFavoritesPanelBounds();
+        if (bounds == null) {
+            return;
+        }
+        if (bounds.contains((int) e.x(), (int) e.y())) {
+            cir.setReturnValue(true);
+        }
+    }
 }

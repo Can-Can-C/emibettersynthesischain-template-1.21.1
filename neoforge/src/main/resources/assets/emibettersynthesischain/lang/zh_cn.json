@@ -23,6 +23,7 @@
   "ebs.config.tree.treeGap": "树间距",
   "ebs.config.tree.byproductGap": "副产物间距",
   "ebs.config.tree.redMarking": "材料不足标红",
+  "ebs.config.tree.aeStorageCheck": "检测 AE2 网络存储",
   "ebs.config.tree.goalRight": "产物列在右（关闭=在左）",
   "ebs.config.tree.backgroundTransparent": "背景透明",
   "ebs.config.tree.numberScale": "数字大小(%)",

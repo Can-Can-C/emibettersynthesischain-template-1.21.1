@@ -26,6 +26,8 @@ public class Config {
     private static final double DEF_TREE_NUMBER_SCALE = 0.5;
     private static final String DEF_TREE_LINE_COLOR = "teal";
     private static final String DEF_TREE_DIVIDER_COLOR = "teal";
+    /** 需求：AE 存储物品检测（默认关闭）——ME 终端内树/标红/可合成判定是否包含网络物品。 */
+    private static final boolean DEF_TREE_AE_STORAGE_CHECK = false;
 
     /** 树模式下左侧栏的物品列数（宽度 = 列数×9px + 内边距，越大面板越宽）。 */
     public static final ModConfigSpec.IntValue TREE_SIDEBAR_WIDTH = BUILDER
@@ -71,6 +73,12 @@ public class Config {
             .comment("Make the synthesis tree background transparent (like the favorites sidebar),",
                     "or draw the old dark background. Default is transparent.")
             .define("treeBackgroundTransparent", DEF_TREE_BACKGROUND_TRANSPARENT);
+
+    /** AE 存储物品检测（默认关闭）：ME 终端内树的库存/标红/可合成判定是否包含 AE 网络存储。 */
+    public static final ModConfigSpec.BooleanValue TREE_AE_STORAGE_CHECK = BUILDER
+            .comment("Include AE2 network storage when reading the inventory for the tree (red-marking,",
+                    "can-craft checks) while an ME terminal is open. Default off.")
+            .define("treeAeStorageCheck", DEF_TREE_AE_STORAGE_CHECK);
 
     /** 合成树图标上数字（数量/拥有量/流体用量）的缩放倍数。 */
     public static final ModConfigSpec.DoubleValue TREE_NUMBER_SCALE = BUILDER
@@ -122,6 +130,7 @@ public class Config {
         TREE_RED_MARKING.set(DEF_TREE_RED_MARKING);
         TREE_GOAL_SIDE.set(DEF_TREE_GOAL_SIDE);
         TREE_BACKGROUND_TRANSPARENT.set(DEF_TREE_BACKGROUND_TRANSPARENT);
+        TREE_AE_STORAGE_CHECK.set(DEF_TREE_AE_STORAGE_CHECK);
         TREE_NUMBER_SCALE.set(DEF_TREE_NUMBER_SCALE);
         TREE_LINE_COLOR.set(DEF_TREE_LINE_COLOR);
         TREE_DIVIDER_COLOR.set(DEF_TREE_DIVIDER_COLOR);

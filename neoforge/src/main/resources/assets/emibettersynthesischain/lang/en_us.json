@@ -23,6 +23,7 @@
   "ebs.config.tree.treeGap": "Tree Gap",
   "ebs.config.tree.byproductGap": "Byproduct Gap",
   "ebs.config.tree.redMarking": "Red-mark Insufficient Materials",
+  "ebs.config.tree.aeStorageCheck": "Detect AE2 Network Storage",
   "ebs.config.tree.goalRight": "Goal Column on Right (off = left)",
   "ebs.config.tree.backgroundTransparent": "Transparent Background",
   "ebs.config.tree.numberScale": "Number Size (%)",
